@@ -62,6 +62,7 @@ namespace XrdCl
   const uint16_t errOSError        = 12;
   const uint16_t errNotSupported   = 13;
   const uint16_t errDataError      = 14; //!< data is corrupted
+  const uint16_t errNotImplemented = 15; //!< Operation is not implemented
 
   //----------------------------------------------------------------------------
   // Socket related errors
@@ -97,6 +98,8 @@ namespace XrdCl
   const uint16_t errRedirectLimit      = 306;
 
   const uint16_t errErrorResponse      = 400;
+
+  const uint16_t errResponseNegative   = 500; //!< Query response was negative
 
   //----------------------------------------------------------------------------
   //! Procedure execution status

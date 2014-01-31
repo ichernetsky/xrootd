@@ -37,6 +37,7 @@ namespace XrdCl
   const uint64_t FileSystemMsg      = 0x0000000000000100ULL;
   const uint64_t AsyncSockMsg       = 0x0000000000000200ULL;
   const uint64_t JobMgrMsg          = 0x0000000000000400ULL;
+  const uint64_t PlugInMgrMsg       = 0x0000000000000800ULL;
 
   //----------------------------------------------------------------------------
   // Environment settings
@@ -52,11 +53,15 @@ namespace XrdCl
   const int DefaultWorkerThreads        = 3;
   const int DefaultCPChunkSize          = 16777216;
   const int DefaultCPParallelChunks     = 4;
+  const int DefaultDataServerTTL        = 300;
+  const int DefaultLoadBalancerTTL      = 1200;
 
   const char * const DefaultPollerPreference   = "built-in,libevent";
   const char * const DefaultNetworkStack       = "IPAll";
   const char * const DefaultClientMonitor      = "";
   const char * const DefaultClientMonitorParam = "";
+  const char * const DefaultPlugInConfDir      = "";
+  const char * const DefaultPlugIn             = "";
 }
 
 #endif // __XRD_CL_CONSTANTS_HH__

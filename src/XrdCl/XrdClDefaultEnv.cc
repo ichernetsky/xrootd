@@ -26,9 +26,12 @@
 #include "XrdCl/XrdClMonitor.hh"
 #include "XrdCl/XrdClCheckSumManager.hh"
 #include "XrdCl/XrdClTransportManager.hh"
+#include "XrdCl/XrdClPlugInManager.hh"
 #include "XrdSys/XrdSysPlugin.hh"
 #include "XrdSys/XrdSysUtils.hh"
 
+#include <libgen.h>
+#include <cstring>
 #include <map>
 #include <pthread.h>
 #include <sys/types.h>
@@ -59,6 +62,7 @@ namespace
       masks["FileSystemMsg"]      = XrdCl::FileSystemMsg;
       masks["AsyncSockMsg"]       = XrdCl::AsyncSockMsg;
       masks["JobMgrMsg"]          = XrdCl::JobMgrMsg;
+      masks["PlugInMgrMsg"]       = XrdCl::PlugInMgrMsg;
     }
 
     //--------------------------------------------------------------------------
@@ -136,6 +140,7 @@ namespace XrdCl
   bool               DefaultEnv::sMonitorInitialized = false;
   CheckSumManager   *DefaultEnv::sCheckSumManager    = 0;
   TransportManager  *DefaultEnv::sTransportManager   = 0;
+  PlugInManager     *DefaultEnv::sPlugInManager      = 0;
 
   //----------------------------------------------------------------------------
   // Constructor
@@ -153,10 +158,19 @@ namespace XrdCl
     PutInt( "WorkerThreads",         DefaultWorkerThreads        );
     PutInt( "CPChunkSize",           DefaultCPChunkSize          );
     PutInt( "CPParallelChunks",      DefaultCPParallelChunks     );
+    PutInt( "DataServerTTL",         DefaultDataServerTTL        );
+    PutInt( "LoadBalancerTTL",       DefaultLoadBalancerTTL      );
     PutString( "PollerPreference",   DefaultPollerPreference     );
     PutString( "ClientMonitor",      DefaultClientMonitor        );
     PutString( "ClientMonitorParam", DefaultClientMonitorParam   );
     PutString( "NetworkStack",       DefaultNetworkStack         );
+    PutString( "PlugInConfDir",      DefaultPlugInConfDir        );
+    PutString( "PlugIn",             DefaultPlugIn               );
+
+    char *tmp = strdup( XrdSysUtils::ExecName() );
+    char *appName = basename( tmp );
+    PutString( "AppName", appName );
+    free( tmp );
 
     ImportInt(    "ConnectionWindow",     "XRD_CONNECTIONWINDOW"     );
     ImportInt(    "ConnectionRetry",      "XRD_CONNECTIONRETRY"      );
@@ -169,10 +183,15 @@ namespace XrdCl
     ImportInt(    "WorkerThreads",        "XRD_WORKERTHREADS"        );
     ImportInt(    "CPChunkSize",          "XRD_CPCHUNKSIZE"          );
     ImportInt(    "CPParallelChunks",     "XRD_CPPARALLELCHUNKS"     );
+    ImportInt(    "DataServerTTL",        "XRD_DATASERVERTTL"        );
+    ImportInt(    "LoadBalancerTTL",      "XRD_LOADBALANCERTTL"      );
     ImportString( "PollerPreference",     "XRD_POLLERPREFERENCE"     );
     ImportString( "ClientMonitor",        "XRD_CLIENTMONITOR"        );
     ImportString( "ClientMonitorParam",   "XRD_CLIENTMONITORPARAM"   );
     ImportString( "NetworkStack",         "XRD_NETWORKSTACK"         );
+    ImportString( "AppName",              "XRD_APPNAME"              );
+    ImportString( "PlugIn",               "XRD_PLUGIN"               );
+    ImportString( "PlugInConfDir",        "XRD_PLUGINCONFDIR"        );
   }
 
   //----------------------------------------------------------------------------
@@ -392,16 +411,30 @@ namespace XrdCl
   }
 
   //----------------------------------------------------------------------------
+  // Get plug-in manager
+  //----------------------------------------------------------------------------
+  PlugInManager *DefaultEnv::GetPlugInManager()
+  {
+    return sPlugInManager;
+  }
+
+
+  //----------------------------------------------------------------------------
   // Initialize the environment
   //----------------------------------------------------------------------------
   void DefaultEnv::Initialize()
   {
-    sLog         = new Log();
-    sEnv         = new DefaultEnv();
-    sForkHandler = new ForkHandler();
-    sFileTimer   = new FileTimer();
-    sForkHandler->RegisterFileTimer( sFileTimer );
+    sLog           = new Log();
     SetUpLog();
+
+    sEnv           = new DefaultEnv();
+    sForkHandler   = new ForkHandler();
+    sFileTimer     = new FileTimer();
+    sPlugInManager = new PlugInManager();
+
+    sPlugInManager->ProcessEnvironmentSettings();
+    sForkHandler->RegisterFileTimer( sFileTimer );
+
 
     //--------------------------------------------------------------------------
     // MacOSX library loading is completely moronic. We cannot dlopen a library
@@ -465,6 +498,9 @@ namespace XrdCl
 
     delete sFileTimer;
     sFileTimer = 0;
+
+    delete sPlugInManager;
+    sPlugInManager = 0;
 
     delete sEnv;
     sEnv = 0;
@@ -559,6 +595,7 @@ namespace XrdCl
     log->SetTopicName( FileSystemMsg,      "FileSystem" );
     log->SetTopicName( AsyncSockMsg,       "AsyncSock" );
     log->SetTopicName( JobMgrMsg,          "JobMgr" );
+    log->SetTopicName( PlugInMgrMsg,       "PlugInMgr" );
   }
 }
 

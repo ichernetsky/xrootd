@@ -131,6 +131,10 @@ int XrdFixed::stat(const char *name, struct stat *buf, XrdOucErrInfo &eInfo, con
                    const char *opaque) {
     return 0;
 }
+int XrdFixed::stat(const char *name, mode_t &mod, XrdOucErrInfo &eInfo, const XrdSecEntity *cilent,
+                   const char *opaque) {
+    return 0;
+}
 
 /* Truncate a file */
 int truncate(const char *path, XrdSfsFileOffset fsize, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
