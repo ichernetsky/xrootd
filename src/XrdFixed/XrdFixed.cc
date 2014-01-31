@@ -41,6 +41,7 @@ XrdOucTrace FixedTrace(&FixedEroute);
 /*****************************************************************************/
 /*           X r d F i x e d   F i l e  S y s t e m  O b j e c t             */
 /*****************************************************************************/
+XrdVERSIONINFO(XrdSfsGetFileSystem,XrdFixed);
 XrdFixed XrdFixedFS;
 
 /*****************************************************************************/
@@ -52,12 +53,15 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS, XrdSysLogger *
     FixedEroute.logger(logger);
     FixedEroute.Say("(c) 2014 Qualys Inc. XrdFixed version " XrdVSTRING);
 
+    /*
     if (nativeFS == NULL) {
         FixedEroute.Say("Error: native file system object can not be null");
         return NULL;
-    }
+        }
+    */
 
-    XrdFixedFS.setNativeFS(nativeFS);
+    /* TODO: Retrieve the default file system (XrdOfs) pointer and store it */
+    XrdFixedFS.setNativeFS(NULL);
 
     return &XrdFixedFS;
 }
@@ -137,8 +141,8 @@ int XrdFixed::stat(const char *name, mode_t &mod, XrdOucErrInfo &eInfo, const Xr
 }
 
 /* Truncate a file */
-int truncate(const char *path, XrdSfsFileOffset fsize, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
-             const char *opaque = 0) {
+int XrdFixed::truncate(const char *path, XrdSfsFileOffset fsize, XrdOucErrInfo &eInfo, const XrdSecEntity *client,
+                       const char *opaque) {
     return 0;
 }
 
