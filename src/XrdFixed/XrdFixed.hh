@@ -125,6 +125,9 @@ class XrdFixed : public XrdSfsFileSystem {
     int rem(const char *path, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0, const char *opaque = 0);
 
     /* Remove directory */
+    int remdir(const char *path, XrdOucErrInfo &eInfo, const XrdSecEntity *client, const char *opaque);
+
+    /* Remove directory */
     int rdir(const char *path, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0, const char *opaque = 0);
 
     /* Rename a file or directory */
