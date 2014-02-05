@@ -36,6 +36,8 @@
 #include <string>
 #include <algorithm>
 
+XrdVERSIONINFOREF( XrdCl );
+
 namespace XrdCl
 {
   //----------------------------------------------------------------------------
@@ -275,12 +277,15 @@ namespace XrdCl
       return;
     }
 
-    if( config.find( "url" ) == config.end() ||
-        config.find( "lib" ) == config.end() )
+    const char *keys[] = { "url", "lib", "enable", 0 };
+    for( int i = 0; keys[i]; ++i )
     {
-      log->Debug( PlugInMgrMsg, "Unable to find 'url' and 'lib' settings in %s",
-                  confFile.c_str() );
-      return;
+      if( config.find( keys[i] ) == config.end() )
+      {
+        log->Debug( PlugInMgrMsg, "Unable to find '%s' key in the config file "
+                    "%s, ignoring this config", keys[i], confFile.c_str() );
+        return;
+      }
     }
 
     //--------------------------------------------------------------------------
@@ -288,14 +293,28 @@ namespace XrdCl
     //--------------------------------------------------------------------------
     std::string url = config["url"];
     std::string lib = config["lib"];
+    std::string enable = config["enable"];
 
-    log->Debug( PlugInMgrMsg, "Trying to load a plug-in for '%s' from '%s'",
-                url.c_str(), lib.c_str() );
+    log->Dump( PlugInMgrMsg, "Settings from '%s': url='%s', lib='%s', "
+               "enable='%s'", confFile.c_str(), url.c_str(), lib.c_str(),
+               enable.c_str() );
 
-    std::pair<XrdSysPlugin*, PlugInFactory *> pg = LoadFactory( lib );
+    std::pair<XrdSysPlugin*, PlugInFactory *> pg;
+    pg.first = 0; pg.second = 0;
+    if( enable == "true" )
+    {
+      log->Debug( PlugInMgrMsg, "Trying to load a plug-in for '%s' from '%s'",
+                  url.c_str(), lib.c_str() );
 
-    if( !pg.first )
-      return;
+      pg = LoadFactory( lib );
+
+      if( !pg.first )
+        return;
+    }
+    else
+      log->Debug( PlugInMgrMsg, "Trying to disable plug-in for '%s'",
+                  url.c_str() );
+
     if( !RegisterFactory( url, lib, pg.second, pg.first ) )
     {
       delete pg.first;
@@ -313,10 +332,11 @@ namespace XrdCl
 
     char errorBuff[1024];
     XrdSysPlugin *pgHandler = new XrdSysPlugin( errorBuff, 1024,
-                                                lib.c_str(), lib.c_str() );
+                                                lib.c_str(), lib.c_str(),
+                                                &XrdVERSIONINFOVAR( XrdCl ) );
 
     PlugInFunc_t pgFunc= (PlugInFunc_t)pgHandler->getPlugin(
-      "GetClientPlugInFactory", false, false );
+      "XrdClGetPlugIn", false, false );
 
     if( !pgFunc )
     {
@@ -373,19 +393,22 @@ namespace XrdCl
       return false;
 
     //--------------------------------------------------------------------------
-    // Insert into the map
+    // Insert or remove from the map
     //--------------------------------------------------------------------------
-    FactoryHelper *h = new FactoryHelper();
-    h->isEnv   = true;
-    h->counter = normalizedURLs.size();
-    h->plugin  = plugin;
-    h->factory = factory;
+    FactoryHelper *h = 0;
+
+    if( factory )
+    {
+      h = new FactoryHelper();
+      h->isEnv   = true;
+      h->counter = normalizedURLs.size();
+      h->plugin  = plugin;
+      h->factory = factory;
+    }
 
     std::map<std::string, FactoryHelper*>::iterator mapIt;
     for( it = normalizedURLs.begin(); it != normalizedURLs.end(); ++it )
     {
-      log->Debug( PlugInMgrMsg, "Registering a factory for %s from %s",
-                   it->c_str(), lib.c_str() );
       mapIt = pFactoryMap.find( *it );
       if( mapIt != pFactoryMap.end() )
       {
@@ -393,7 +416,22 @@ namespace XrdCl
         if( mapIt->second->counter == 0 )
           delete mapIt->second;
       }
-      pFactoryMap[*it] = h;
+
+      if( h )
+      {
+        log->Debug( PlugInMgrMsg, "Registering a factory for %s from %s",
+                    it->c_str(), lib.c_str() );
+        pFactoryMap[*it] = h;
+      }
+      else
+      {
+        if( mapIt != pFactoryMap.end() )
+        {
+          log->Debug( PlugInMgrMsg, "Removing the factory for %s",
+                      it->c_str() );
+          pFactoryMap.erase( mapIt );
+        }
+      }
     }
 
     return true;
