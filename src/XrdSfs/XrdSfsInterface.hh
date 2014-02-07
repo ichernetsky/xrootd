@@ -213,7 +213,7 @@ public:
 //! @return nil    - Insufficient memory to allocate an object.
 //-----------------------------------------------------------------------------
 
-virtual XrdSfsDirectory *newDir(char *user=0, int MonID=0)  = 0;
+virtual XrdSfsDirectory *newDir(const char *user=0, int MonID=0)  = 0;
 
 //-----------------------------------------------------------------------------
 //! Obtain a new file object to be used for a future file requests.
@@ -227,7 +227,7 @@ virtual XrdSfsDirectory *newDir(char *user=0, int MonID=0)  = 0;
 //! @return nil    - Insufficient memory to allocate an object.
 //-----------------------------------------------------------------------------
 
-virtual XrdSfsFile      *newFile(char *user=0, int MonID=0) = 0;
+virtual XrdSfsFile      *newFile(const char *user=0, int MonID=0) = 0;
 
 //-----------------------------------------------------------------------------
 //! Obtain checksum information for a file.
