@@ -34,13 +34,33 @@
 /*                  C l a s s    X r d F i x e d D i r e c t o r y           */
 /*****************************************************************************/
 class XrdFixedDirectory : public XrdSfsDirectory {
+  public:
 
-};
+    /* Open a directory. */
+    int open(const char *path, const XrdSecEntity *client = 0, const char *opaque = 0);
+
+    /* Get the next directory entry. */
+    const char *nextEntry();
+
+    /* Close the file. */
+    int close();
+
+    /* Get the directory path. */
+    const char *FName();
+
+    /* Constructor and Destructor */
+    XrdFixedDirectory(const char* user, int MonID);
+    virtual ~XrdFixedDirectory();
+  private:
+    XrdSfsDirectory *nativeDirectory;
+}; // class XrdFixedDirectory
 
 /*****************************************************************************/
 /*                  C l a s s    X r d F i x e d F i l e                     */
 /*****************************************************************************/
 class XrdFixedFile : public XrdSfsFile {
+  public:
+
     /* Open a file */
     int open(const char *fileName, XrdSfsFileOpenMode openMode, mode_t createMode, const XrdSecEntity *client = 0,
              const char *opaque = 0);
@@ -49,34 +69,37 @@ class XrdFixedFile : public XrdSfsFile {
     int close();
 
     /* Execute a special operation on the file */
-    int fctnl (const int cmd, const char *args, XrdOucErrInfo *eInfo);
+    int fctl(const int cmd, const char *args, XrdOucErrInfo& eInfo);
 
     /* Get File Path */
-    const char* FName();
+    const char *FName();
 
-    /* Get file's memoery mapping if one exists (memory mapped files only) */
+    /* Get file's memory mapping if one exists (memory mapped files only) */
     int getMmap(void **Addr, off_t &Size);
+    
+    /* Preread file blocks into the file system cache */
+    XrdSfsXferSize read(XrdSfsFileOffset offset, XrdSfsXferSize size);
 
     /* Read file bytes into a buffer */
-    XrdSfsXferSize read (XrdSfsFileOffset offset, char* buffer, XrdSfsXferSize size);
-    
+    XrdSfsXferSize read(XrdSfsFileOffset offset, char *buffer, XrdSfsXferSize size);
+
     /* Read file bytes using asychronous I/O */
-    XrdSfsXferSize read (XrdSfsAio *aioparam);
+    XrdSfsXferSize read(XrdSfsAio *aioparam);
 
     /* Write file bytes from a buffer */
-    XrdSfsXferSize write (XrdSfsFileOffset offset, const char* buffer, XrdSfsXferSize size);
+    XrdSfsXferSize write(XrdSfsFileOffset offset, const char *buffer, XrdSfsXferSize size);
 
     /* Write file bytes using asynchronous I/O */
-    int write (XrdSfsAio *aioparm);
+    int write(XrdSfsAio *aioparam);
 
     /* Return state information on the file */
-    int stat(struct stat* buf);
+    int stat(struct stat *buf);
 
     /* Make sure all the outstanding data is actually written on the file (sync) */
     int sync();
-   
+
     /* Make sure all outstanding data is actually written to the file (async) */
-    int sync(XrdSfsAio* aiop);
+    int sync(XrdSfsAio *aiop);
 
     /* Truncate the file */
     int truncate(XrdSfsFileOffset fsize);
@@ -84,18 +107,25 @@ class XrdFixedFile : public XrdSfsFile {
     /* Get compression information on the file */
     int getCXinfo(char cxtype[4], int &cxrsz);
 
-    /* Destructor */
+    /* Constructor and Destructor */
+    XrdFixedFile(const char *user, int MonID);
     ~XrdFixedFile();
-};
+
+  private:
+    XrdSfsFile *nativeFile;
+}; // XrdFixedFile
 
 /*****************************************************************************/
 /*                  C l a s s    X r d F i x e d                             */
 /*****************************************************************************/
 class XrdFixed : public XrdSfsFileSystem {
+    friend class XrdFixedFile;
+    friend class XrdFixedDirectory;
+
   public:
     /* Object allocation */
-    XrdSfsDirectory *newDir(char *user = 0, int monid = 0);
-    XrdSfsFile *newFile(char *user = 0, int monid = 0);
+    XrdSfsDirectory *newDir(const char *user = 0, int monid = 0);
+    XrdSfsFile *newFile(const char *user = 0, int monid = 0);
 
     /* Change file mod settings */
     int chmod(const char *path, XrdSfsMode mode, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
@@ -119,7 +149,7 @@ class XrdFixed : public XrdSfsFileSystem {
               const char *opaque = 0);
 
     /* Prepare a file for future processing */
-    int prepare(XrdSfsPrep &pargs, XrdOucErrInfo &eInfo, const XrdSecEntity *cluent = 0);
+    int prepare(XrdSfsPrep &pargs, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0);
 
     /* Remove a file */
     int rem(const char *path, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0, const char *opaque = 0);
@@ -135,9 +165,9 @@ class XrdFixed : public XrdSfsFileSystem {
                const char *opaqueO = 0, const char *opaqueN = 0);
 
     /* Return state information on file or a directory */
-    int stat(const char *name, struct stat *buf, XrdOucErrInfo &eInfo, const XrdSecEntity *cilent = 0,
+    int stat(const char *name, struct stat *buf, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
              const char *opaque = 0);
-    int stat(const char *name, mode_t &mod, XrdOucErrInfo &eInfo, const XrdSecEntity *cilent = 0,
+    int stat(const char *name, mode_t &mod, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
              const char *opaque = 0);
 
     /* Truncate a file */
@@ -153,6 +183,6 @@ class XrdFixed : public XrdSfsFileSystem {
 
   private:
     XrdSfsFileSystem *nativeFS;
-};
+}; // XrdFixedFileSystem
 
 #endif
