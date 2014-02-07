@@ -193,7 +193,7 @@ void XrdFixed::setNativeFS(XrdSfsFileSystem *native) {
 XrdFixedFile::XrdFixedFile(const char* user, int MonID) {
     /* Initialize the natvie file object */
     FixedEroute.Say("XrdFixedFile::ctor");
-    nativeFile = XrdFixedFS.newFile(user, MonID);
+    nativeFile = XrdFixedFS.nativeFS->newFile(user, MonID);
 }
 
 /*****************************************************************************/
@@ -306,7 +306,7 @@ int XrdFixedFile::getCXinfo(char cxtype[4], int &cxrsz) {
 XrdFixedDirectory::XrdFixedDirectory(const char* user, int MonID) {
     /* Initialize the natvie directory object */
     FixedEroute.Say("XrdFixedDirectory::ctor");
-    nativeDirectory = XrdFixedFS.newDir(user, MonID);
+    nativeDirectory = XrdFixedFS.nativeFS->newDir(user, MonID);
 }
 
 /*****************************************************************************/
