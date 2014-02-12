@@ -81,12 +81,12 @@ XrdFixed::~XrdFixed() {
 /*           F i l e   S y s t e m   O b j e c t  I n t e r f a c e          */
 /*                                                                           */
 /*****************************************************************************/
-XrdSfsDirectory *XrdFixed::newDir(const char *user, int monid) { 
+XrdSfsDirectory *XrdFixed::newDir(char *user, int monid) { 
     FixedEroute.Say("XrdFixed::newDir");
     return new XrdFixedDirectory(user, monid); 
 }
 
-XrdSfsFile *XrdFixed::newFile(const char *user, int monid) { 
+XrdSfsFile *XrdFixed::newFile(char *user, int monid) { 
     FixedEroute.Say("XrdFixed::newFile");
     return new XrdFixedFile(user, monid); 
 }
@@ -190,7 +190,7 @@ void XrdFixed::setNativeFS(XrdSfsFileSystem *native) {
 /*****************************************************************************/
 /*            X r d F i x e d F i l e   c o n s t r u c t o r                */
 /*****************************************************************************/
-XrdFixedFile::XrdFixedFile(const char* user, int MonID) {
+XrdFixedFile::XrdFixedFile(char* user, int MonID) {
     /* Initialize the natvie file object */
     FixedEroute.Say("XrdFixedFile::ctor");
     nativeFile = XrdFixedFS.nativeFS->newFile(user, MonID);
@@ -303,7 +303,7 @@ int XrdFixedFile::getCXinfo(char cxtype[4], int &cxrsz) {
 /*****************************************************************************/
 /*      X r d F i x e d D i r e c t o r y  c o n s t r u c t o r             */
 /*****************************************************************************/
-XrdFixedDirectory::XrdFixedDirectory(const char* user, int MonID) {
+XrdFixedDirectory::XrdFixedDirectory(char* user, int MonID) {
     /* Initialize the natvie directory object */
     FixedEroute.Say("XrdFixedDirectory::ctor");
     nativeDirectory = XrdFixedFS.nativeFS->newDir(user, MonID);

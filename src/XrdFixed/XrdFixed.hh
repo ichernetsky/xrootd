@@ -49,7 +49,7 @@ class XrdFixedDirectory : public XrdSfsDirectory {
     const char *FName();
 
     /* Constructor and Destructor */
-    XrdFixedDirectory(const char* user, int MonID);
+    XrdFixedDirectory(char* user, int MonID);
     virtual ~XrdFixedDirectory();
   private:
     XrdSfsDirectory *nativeDirectory;
@@ -108,7 +108,7 @@ class XrdFixedFile : public XrdSfsFile {
     int getCXinfo(char cxtype[4], int &cxrsz);
 
     /* Constructor and Destructor */
-    XrdFixedFile(const char *user, int MonID);
+    XrdFixedFile(char *user, int MonID);
     ~XrdFixedFile();
 
   private:
@@ -124,8 +124,8 @@ class XrdFixed : public XrdSfsFileSystem {
 
   public:
     /* Object allocation */
-    XrdSfsDirectory *newDir(const char *user = 0, int monid = 0);
-    XrdSfsFile *newFile(const char *user = 0, int monid = 0);
+    XrdSfsDirectory *newDir(char *user = 0, int monid = 0);
+    XrdSfsFile *newFile(char *user = 0, int monid = 0);
 
     /* Change file mod settings */
     int chmod(const char *path, XrdSfsMode mode, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
