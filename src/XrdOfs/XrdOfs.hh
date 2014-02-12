@@ -185,10 +185,10 @@ public:
 
 // Object allocation
 //
-        XrdSfsDirectory *newDir(const char *user=0, int MonID=0)
+        XrdSfsDirectory *newDir(char *user=0, int MonID=0)
                         {return (XrdSfsDirectory *)new XrdOfsDirectory(user,MonID);}
 
-        XrdSfsFile      *newFile(const char *user=0,int MonID=0)
+        XrdSfsFile      *newFile(char *user=0,int MonID=0)
                         {return      (XrdSfsFile *)new XrdOfsFile(user, MonID);}
 
 // Other functions
