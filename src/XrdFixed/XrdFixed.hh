@@ -34,155 +34,166 @@
 /*                  C l a s s    X r d F i x e d D i r e c t o r y           */
 /*****************************************************************************/
 class XrdFixedDirectory : public XrdSfsDirectory {
-  public:
+public:
 
-    /* Open a directory. */
-    int open(const char *path, const XrdSecEntity *client = 0, const char *opaque = 0);
+  /* Open a directory. */
+  int open(const char *path, const XrdSecEntity *client = 0,
+           const char *opaque = 0);
 
-    /* Get the next directory entry. */
-    const char *nextEntry();
+  /* Get the next directory entry. */
+  const char *nextEntry();
 
-    /* Close the file. */
-    int close();
+  /* Close the file. */
+  int close();
 
-    /* Get the directory path. */
-    const char *FName();
+  /* Get the directory path. */
+  const char *FName();
 
-    /* Constructor and Destructor */
-    XrdFixedDirectory(char* user, int MonID);
-    virtual ~XrdFixedDirectory();
-  private:
-    XrdSfsDirectory *nativeDirectory;
+  /* Constructor and Destructor */
+  XrdFixedDirectory(char *user, int MonID);
+  virtual ~XrdFixedDirectory();
+
+private:
+  XrdSfsDirectory *nativeDirectory;
 }; // class XrdFixedDirectory
 
 /*****************************************************************************/
 /*                  C l a s s    X r d F i x e d F i l e                     */
 /*****************************************************************************/
 class XrdFixedFile : public XrdSfsFile {
-  public:
+public:
 
-    /* Open a file */
-    int open(const char *fileName, XrdSfsFileOpenMode openMode, mode_t createMode, const XrdSecEntity *client = 0,
-             const char *opaque = 0);
+  /* Open a file */
+  int open(const char *fileName, XrdSfsFileOpenMode openMode, mode_t createMode,
+           const XrdSecEntity *client = 0, const char *opaque = 0);
 
-    /* Close a file */
-    int close();
+  /* Close a file */
+  int close();
 
-    /* Execute a special operation on the file */
-    int fctl(const int cmd, const char *args, XrdOucErrInfo& eInfo);
+  /* Execute a special operation on the file */
+  int fctl(const int cmd, const char *args, XrdOucErrInfo &eInfo);
 
-    /* Get File Path */
-    const char *FName();
+  /* Get File Path */
+  const char *FName();
 
-    /* Get file's memory mapping if one exists (memory mapped files only) */
-    int getMmap(void **Addr, off_t &Size);
-    
-    /* Preread file blocks into the file system cache */
-    XrdSfsXferSize read(XrdSfsFileOffset offset, XrdSfsXferSize size);
+  /* Get file's memory mapping if one exists (memory mapped files only) */
+  int getMmap(void **Addr, off_t &Size);
 
-    /* Read file bytes into a buffer */
-    XrdSfsXferSize read(XrdSfsFileOffset offset, char *buffer, XrdSfsXferSize size);
+  /* Preread file blocks into the file system cache */
+  XrdSfsXferSize read(XrdSfsFileOffset offset, XrdSfsXferSize size);
 
-    /* Read file bytes using asychronous I/O */
-    XrdSfsXferSize read(XrdSfsAio *aioparam);
+  /* Read file bytes into a buffer */
+  XrdSfsXferSize read(XrdSfsFileOffset offset, char *buffer,
+                      XrdSfsXferSize size);
 
-    /* Write file bytes from a buffer */
-    XrdSfsXferSize write(XrdSfsFileOffset offset, const char *buffer, XrdSfsXferSize size);
+  /* Read file bytes using asychronous I/O */
+  XrdSfsXferSize read(XrdSfsAio *aioparam);
 
-    /* Write file bytes using asynchronous I/O */
-    int write(XrdSfsAio *aioparam);
+  /* Write file bytes from a buffer */
+  XrdSfsXferSize write(XrdSfsFileOffset offset, const char *buffer,
+                       XrdSfsXferSize size);
 
-    /* Return state information on the file */
-    int stat(struct stat *buf);
+  /* Write file bytes using asynchronous I/O */
+  int write(XrdSfsAio *aioparam);
 
-    /* Make sure all the outstanding data is actually written on the file (sync) */
-    int sync();
+  /* Return state information on the file */
+  int stat(struct stat *buf);
 
-    /* Make sure all outstanding data is actually written to the file (async) */
-    int sync(XrdSfsAio *aiop);
+  /* Make sure all the outstanding data is actually written on the file (sync)
+   */
+  int sync();
 
-    /* Truncate the file */
-    int truncate(XrdSfsFileOffset fsize);
+  /* Make sure all outstanding data is actually written to the file (async) */
+  int sync(XrdSfsAio *aiop);
 
-    /* Get compression information on the file */
-    int getCXinfo(char cxtype[4], int &cxrsz);
+  /* Truncate the file */
+  int truncate(XrdSfsFileOffset fsize);
 
-    /* Constructor and Destructor */
-    XrdFixedFile(char *user, int MonID);
-    ~XrdFixedFile();
+  /* Get compression information on the file */
+  int getCXinfo(char cxtype[4], int &cxrsz);
 
-  private:
-    XrdSfsFile *nativeFile;
+  /* Constructor and Destructor */
+  XrdFixedFile(char *user, int MonID);
+  ~XrdFixedFile();
+
+private:
+  XrdSfsFile *nativeFile;
 }; // XrdFixedFile
 
 /*****************************************************************************/
 /*                  C l a s s    X r d F i x e d                             */
 /*****************************************************************************/
 class XrdFixed : public XrdSfsFileSystem {
-    friend class XrdFixedFile;
-    friend class XrdFixedDirectory;
+  friend class XrdFixedFile;
+  friend class XrdFixedDirectory;
 
-  public:
-    /* Object allocation */
-    XrdSfsDirectory *newDir(char *user = 0, int monid = 0);
-    XrdSfsFile *newFile(char *user = 0, int monid = 0);
+public:
+  /* Object allocation */
+  XrdSfsDirectory *newDir(char *user = 0, int monid = 0);
+  XrdSfsFile *newFile(char *user = 0, int monid = 0);
 
-    /* Change file mod settings */
-    int chmod(const char *path, XrdSfsMode mode, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
-              const char *opaque = 0);
+  /* Change file mod settings */
+  int chmod(const char *path, XrdSfsMode mode, XrdOucErrInfo &eInfo,
+            const XrdSecEntity *client = 0, const char *opaque = 0);
 
-    /* File system control operation */
-    int fsctl(const int cmd, const char *args, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0);
+  /* File system control operation */
+  int fsctl(const int cmd, const char *args, XrdOucErrInfo &eInfo,
+            const XrdSecEntity *client = 0);
 
-    /* Return statistical information */
-    int getStats(char *buff, int blen);
+  /* Return statistical information */
+  int getStats(char *buff, int blen);
 
-    /* Get version string */
-    const char *getVersion();
+  /* Get version string */
+  const char *getVersion();
 
-    /* Return directory/file existense information (short list)  */
-    int exists(const char *path, XrdSfsFileExistence &eFlag, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
-               const char *opaque = 0);
+  /* Return directory/file existense information (short list)  */
+  int exists(const char *path, XrdSfsFileExistence &eFlag, XrdOucErrInfo &eInfo,
+             const XrdSecEntity *client = 0, const char *opaque = 0);
 
-    /* Create directory */
-    int mkdir(const char *path, XrdSfsMode mode, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
-              const char *opaque = 0);
+  /* Create directory */
+  int mkdir(const char *path, XrdSfsMode mode, XrdOucErrInfo &eInfo,
+            const XrdSecEntity *client = 0, const char *opaque = 0);
 
-    /* Prepare a file for future processing */
-    int prepare(XrdSfsPrep &pargs, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0);
+  /* Prepare a file for future processing */
+  int prepare(XrdSfsPrep &pargs, XrdOucErrInfo &eInfo,
+              const XrdSecEntity *client = 0);
 
-    /* Remove a file */
-    int rem(const char *path, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0, const char *opaque = 0);
+  /* Remove a file */
+  int rem(const char *path, XrdOucErrInfo &eInfo,
+          const XrdSecEntity *client = 0, const char *opaque = 0);
 
-    /* Remove directory */
-    int remdir(const char *path, XrdOucErrInfo &eInfo, const XrdSecEntity *client, const char *opaque);
+  /* Remove directory */
+  int remdir(const char *path, XrdOucErrInfo &eInfo, const XrdSecEntity *client,
+             const char *opaque);
 
-    /* Remove directory */
-    int rdir(const char *path, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0, const char *opaque = 0);
+  /* Remove directory */
+  int rdir(const char *path, XrdOucErrInfo &eInfo,
+           const XrdSecEntity *client = 0, const char *opaque = 0);
 
-    /* Rename a file or directory */
-    int rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
-               const char *opaqueO = 0, const char *opaqueN = 0);
+  /* Rename a file or directory */
+  int rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
+             const XrdSecEntity *client = 0, const char *opaqueO = 0,
+             const char *opaqueN = 0);
 
-    /* Return state information on file or a directory */
-    int stat(const char *name, struct stat *buf, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
-             const char *opaque = 0);
-    int stat(const char *name, mode_t &mod, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
-             const char *opaque = 0);
+  /* Return state information on file or a directory */
+  int stat(const char *name, struct stat *buf, XrdOucErrInfo &eInfo,
+           const XrdSecEntity *client = 0, const char *opaque = 0);
+  int stat(const char *name, mode_t &mod, XrdOucErrInfo &eInfo,
+           const XrdSecEntity *client = 0, const char *opaque = 0);
 
-    /* Truncate a file */
-    int truncate(const char *path, XrdSfsFileOffset fsize, XrdOucErrInfo &eInfo, const XrdSecEntity *client = 0,
-                 const char *opaque = 0);
+  /* Truncate a file */
+  int truncate(const char *path, XrdSfsFileOffset fsize, XrdOucErrInfo &eInfo,
+               const XrdSecEntity *client = 0, const char *opaque = 0);
 
-    /* Constructor and destructor */
-    XrdFixed();
-    virtual ~XrdFixed();
+  /* Constructor and destructor */
+  XrdFixed();
+  virtual ~XrdFixed();
 
-    /* Internal functions */
-    void setNativeFS(XrdSfsFileSystem *nativeFS);
+  /* Internal functions */
+  void setNativeFS(XrdSfsFileSystem *nativeFS);
 
-  private:
-    XrdSfsFileSystem *nativeFS;
+private:
+  XrdSfsFileSystem *nativeFS;
 }; // XrdFixedFileSystem
 
 #endif

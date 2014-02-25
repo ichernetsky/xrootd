@@ -277,8 +277,13 @@ namespace
       //------------------------------------------------------------------------
       //! Constructor
       //------------------------------------------------------------------------
-      LocalSource( const XrdCl::URL *url ):
-        pPath( url->GetPath() ), pFD( -1 ), pSize( -1 ), pCurrentOffset( 0 ) {}
+      LocalSource( const XrdCl::URL *url, const std::string &ckSumType ):
+        pPath( url->GetPath() ), pFD( -1 ), pSize( -1 ), pCurrentOffset( 0 ),
+        pCkSumHelper(0)
+      {
+        if( !ckSumType.empty() )
+          pCkSumHelper = new CheckSumHelper( url->GetPath(), ckSumType );
+      }
 
       //------------------------------------------------------------------------
       //! Destructor
@@ -287,6 +292,7 @@ namespace
       {
         if( pFD != -1 )
           close( pFD );
+        delete pCkSumHelper;
       }
 
       //------------------------------------------------------------------------
@@ -296,6 +302,13 @@ namespace
       {
         using namespace XrdCl;
         Log *log = DefaultEnv::GetLog();
+
+        if( pCkSumHelper )
+        {
+          XRootDStatus st = pCkSumHelper->Initialize();
+          if( !st.IsOK() )
+            return st;
+        }
 
         //----------------------------------------------------------------------
         // Open the file for reading and get it's size
@@ -363,6 +376,9 @@ namespace
           return XRootDStatus( stOK, suDone );
         }
 
+        if( pCkSumHelper )
+          pCkSumHelper->Update( buffer, bytesRead );
+
         ci.offset = pCurrentOffset;
         ci.length = bytesRead;
         ci.buffer = buffer;
@@ -376,15 +392,18 @@ namespace
       virtual XrdCl::XRootDStatus GetCheckSum( std::string &checkSum,
                                                std::string &checkSumType )
       {
-        return XrdCl::Utils::GetLocalCheckSum( checkSum, checkSumType, pPath );
+        using namespace XrdCl;
+        if( pCkSumHelper )
+          return pCkSumHelper->GetCheckSum( checkSum, checkSumType );
+        return XRootDStatus( stError, errCheckSumError );
       }
 
-
     private:
-      std::string pPath;
-      int         pFD;
-      int64_t     pSize;
-      uint64_t    pCurrentOffset;
+      std::string     pPath;
+      int             pFD;
+      int64_t         pSize;
+      uint64_t        pCurrentOffset;
+      CheckSumHelper *pCkSumHelper;
   };
 
   //----------------------------------------------------------------------------
@@ -397,14 +416,20 @@ namespace
       //! Constructor
       //------------------------------------------------------------------------
       StdInSource( const std::string &ckSumType ):
-        pCkSumHelper( "stdin", ckSumType ), pCurrentOffset(0) {}
+        pCkSumHelper(0), pCurrentOffset(0)
+      {
+        if( !ckSumType.empty() )
+          pCkSumHelper = new CheckSumHelper( "stdin", ckSumType );
+      }
 
       //------------------------------------------------------------------------
       //! Initialize the source
       //------------------------------------------------------------------------
       virtual XrdCl::XRootDStatus Initialize()
       {
-        return pCkSumHelper.Initialize();
+        if( pCkSumHelper )
+          return pCkSumHelper->Initialize();
+        return XrdCl::XRootDStatus();
       }
 
       //------------------------------------------------------------------------
@@ -440,17 +465,22 @@ namespace
           }
 
           if( bRead == 0 )
-          {
-            delete [] buffer;
-            return XRootDStatus( stOK, suDone );
-          }
+            break;
 
           bytesRead += bRead;
           offset    += bRead;
           toRead    -= bRead;
         }
 
-        pCkSumHelper.Update( buffer, bytesRead );
+        if( bytesRead == 0 )
+        {
+          delete [] buffer;
+          return XRootDStatus( stOK, suDone );
+        }
+
+        if( pCkSumHelper )
+          pCkSumHelper->Update( buffer, bytesRead );
+
         ci.offset = pCurrentOffset;
         ci.length = bytesRead;
         ci.buffer = buffer;
@@ -464,12 +494,15 @@ namespace
       virtual XrdCl::XRootDStatus GetCheckSum( std::string &checkSum,
                                                std::string &checkSumType )
       {
-        return pCkSumHelper.GetCheckSum( checkSum, checkSumType );
+        using namespace XrdCl;
+        if( pCkSumHelper )
+          return pCkSumHelper->GetCheckSum( checkSum, checkSumType );
+        return XRootDStatus( stError, errCheckSumError );
       }
 
     private:
-      CheckSumHelper pCkSumHelper;
-      uint64_t       pCurrentOffset;
+      CheckSumHelper *pCkSumHelper;
+      uint64_t        pCurrentOffset;
   };
 
   //----------------------------------------------------------------------------
@@ -974,13 +1007,13 @@ namespace XrdCl
   //----------------------------------------------------------------------------
   // Constructor
   //----------------------------------------------------------------------------
-  ClassicCopyJob::ClassicCopyJob( JobDescriptor *jobDesc ):
-    CopyJob( jobDesc )
+  ClassicCopyJob::ClassicCopyJob( PropertyList *jobProperties,
+                                  PropertyList *jobResults ):
+    CopyJob( jobProperties, jobResults )
   {
     Log *log = DefaultEnv::GetLog();
     log->Debug( UtilityMsg, "Creating a classic copy job, from %s to %s",
-                pJob->source.GetURL().c_str(),
-                pJob->target.GetURL().c_str() );
+                GetSource().GetURL().c_str(), GetTarget().GetURL().c_str() );
   }
 
   //----------------------------------------------------------------------------
@@ -990,29 +1023,44 @@ namespace XrdCl
   {
     Log *log = DefaultEnv::GetLog();
 
+    std::string checkSumMode;
+    std::string checkSumType;
+    std::string checkSumPreset;
+    uint8_t     parallelChunks;
+    uint32_t    chunkSize;
+    bool        posc, force, coerce, makeDir;
+
+    pProperties->Get( "checkSumMode",    checkSumMode );
+    pProperties->Get( "checkSumType",    checkSumType );
+    pProperties->Get( "checkSumPreset",  checkSumPreset );
+    pProperties->Get( "parallelChunks",  parallelChunks );
+    pProperties->Get( "chunkSize",       chunkSize );
+    pProperties->Get( "posc",            posc );
+    pProperties->Get( "force",           force );
+    pProperties->Get( "coerce",          coerce );
+    pProperties->Get( "makeDir",         makeDir );
+
     //--------------------------------------------------------------------------
     // Initialize the source and the destination
     //--------------------------------------------------------------------------
     XRDCL_SMART_PTR_T<Source> src;
-    if( pJob->source.GetProtocol() == "file" )
-      src.reset( new LocalSource( &pJob->source ) );
-    else if( pJob->source.GetProtocol() == "stdio" )
-      src.reset( new StdInSource( pJob->checkSumType ) );
+    if( GetSource().GetProtocol() == "file" )
+      src.reset( new LocalSource( &GetSource(), checkSumType ) );
+    else if( GetSource().GetProtocol() == "stdio" )
+      src.reset( new StdInSource( checkSumType ) );
     else
-      src.reset( new XRootDSource( &pJob->source,
-                                   pJob->chunkSize,
-                                   pJob->parallelChunks ) );
+      src.reset( new XRootDSource( &GetSource(), chunkSize, parallelChunks ) );
 
     XRootDStatus st = src->Initialize();
     if( !st.IsOK() ) return st;
 
     XRDCL_SMART_PTR_T<Destination> dest;
-    URL newDestUrl( pJob->target );
+    URL newDestUrl( GetTarget() );
 
-    if( pJob->target.GetProtocol() == "file" )
-      dest.reset( new LocalDestination( &pJob->target ) );
-    else if( pJob->target.GetProtocol() == "stdio" )
-      dest.reset( new StdOutDestination( pJob->checkSumType ) );
+    if( GetTarget().GetProtocol() == "file" )
+      dest.reset( new LocalDestination( &GetTarget() ) );
+    else if( GetTarget().GetProtocol() == "stdio" )
+      dest.reset( new StdOutDestination( checkSumType ) );
     //--------------------------------------------------------------------------
     // For xrootd destination build the oss.asize hint
     //--------------------------------------------------------------------------
@@ -1028,10 +1076,10 @@ namespace XrdCl
       dest.reset( new XRootDDestination( &newDestUrl ) );
     }
 
-    dest->SetForce( pJob->force );
-    dest->SetPOSC( pJob->posc );
-    dest->SetCoerce( pJob->coerce );
-    dest->SetMakeDir( pJob->makedir );
+    dest->SetForce( force );
+    dest->SetPOSC(  posc );
+    dest->SetCoerce( coerce );
+    dest->SetMakeDir( makeDir );
     st = dest->Initialize();
     if( !st.IsOK() ) return st;
 
@@ -1072,81 +1120,85 @@ namespace XrdCl
                   "received %ld bytes.", size, processed );
       return XRootDStatus( stError, errDataError );
     }
+    pResults->Set( "size", processed );
 
     //--------------------------------------------------------------------------
     // Verify the checksums if needed
     //--------------------------------------------------------------------------
-    if( !pJob->checkSumType.empty() )
+    if( checkSumMode != "none" )
     {
-      log->Debug( UtilityMsg, "Attempting checksum calculation." );
+      log->Debug( UtilityMsg, "Attempting checksum calculation, mode: %s.",
+                  checkSumMode.c_str() );
+      std::string sourceCheckSum;
+      std::string targetCheckSum;
 
       //------------------------------------------------------------------------
       // Get the check sum at source
       //------------------------------------------------------------------------
       timeval oStart, oEnd;
       XRootDStatus st;
-      gettimeofday( &oStart, 0 );
-      if( !pJob->checkSumPreset.empty() )
-      {
-        pJob->sourceCheckSum  = pJob->checkSumType + ":";
-        pJob->sourceCheckSum += pJob->checkSumPreset;
-      }
-      else
-      {
-        st = src->GetCheckSum( pJob->sourceCheckSum, pJob->checkSumType );
-      }
-      gettimeofday( &oEnd, 0 );
 
-      //------------------------------------------------------------------------
-      // Print the checksum if so requested and exit
-      //------------------------------------------------------------------------
-      if( pJob->checkSumPrint )
+      if( checkSumMode == "end2end" || checkSumMode == "source" )
       {
-        std::cerr << std::endl << "CheckSum: ";
-        if( !pJob->sourceCheckSum.empty() )
-          std::cerr << pJob->sourceCheckSum << std::endl;
+        gettimeofday( &oStart, 0 );
+        if( !checkSumPreset.empty() )
+        {
+          sourceCheckSum  = checkSumType + ":";
+          sourceCheckSum += checkSumPreset;
+        }
         else
-           std::cerr << st.ToStr() << std::endl;
-        return XRootDStatus();
-      }
+        {
+          st = src->GetCheckSum( sourceCheckSum, checkSumType );
+        }
+        gettimeofday( &oEnd, 0 );
 
-      if( !st.IsOK() )
-        return st;
+        if( !st.IsOK() )
+          return st;
+
+        pResults->Set( "sourceCheckSum", sourceCheckSum );
+      }
 
       //------------------------------------------------------------------------
       // Get the check sum at destination
       //------------------------------------------------------------------------
       timeval tStart, tEnd;
-      gettimeofday( &tStart, 0 );
-      st = dest->GetCheckSum( pJob->targetCheckSum, pJob->checkSumType );
-      if( !st.IsOK() )
-        return st;
-      gettimeofday( &tEnd, 0 );
+
+      if( checkSumMode == "end2end" || checkSumMode == "target" )
+      {
+        gettimeofday( &tStart, 0 );
+        st = dest->GetCheckSum( targetCheckSum, checkSumType );
+        if( !st.IsOK() )
+          return st;
+        gettimeofday( &tEnd, 0 );
+        pResults->Set( "targetCheckSum", targetCheckSum );
+      }
 
       //------------------------------------------------------------------------
       // Compare and inform monitoring
       //------------------------------------------------------------------------
-      bool match = false;
-      if( pJob->sourceCheckSum == pJob->targetCheckSum )
-        match = true;
-
-      Monitor *mon = DefaultEnv::GetMonitor();
-      if( mon )
+      if( checkSumMode == "end2end" )
       {
-        Monitor::CheckSumInfo i;
-        i.transfer.origin = &pJob->source;
-        i.transfer.target = &pJob->target;
-        i.cksum           = pJob->sourceCheckSum;
-        i.oTime           = Utils::GetElapsedMicroSecs( oStart, oEnd );
-        i.tTime           = Utils::GetElapsedMicroSecs( tStart, tEnd );
-        i.isOK            = match;
-        mon->Event( Monitor::EvCheckSum, &i );
+        bool match = false;
+        if( sourceCheckSum == targetCheckSum )
+          match = true;
+
+        Monitor *mon = DefaultEnv::GetMonitor();
+        if( mon )
+        {
+          Monitor::CheckSumInfo i;
+          i.transfer.origin = &GetSource();
+          i.transfer.target = &GetTarget();
+          i.cksum           = sourceCheckSum;
+          i.oTime           = Utils::GetElapsedMicroSecs( oStart, oEnd );
+          i.tTime           = Utils::GetElapsedMicroSecs( tStart, tEnd );
+          i.isOK            = match;
+          mon->Event( Monitor::EvCheckSum, &i );
+        }
+
+        if( !match )
+          return XRootDStatus( stError, errCheckSumError, 0 );
       }
-
-      if( !match )
-        return XRootDStatus( stError, errCheckSumError, 0 );
     }
-
     return XRootDStatus();
   }
 }

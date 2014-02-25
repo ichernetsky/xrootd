@@ -315,7 +315,7 @@ namespace XrdCl
   //----------------------------------------------------------------------------
   // Check if peer supports tpc
   //----------------------------------------------------------------------------
-  XRootDStatus Utils::CheckTPC( const std::string &server )
+  XRootDStatus Utils::CheckTPC( const std::string &server, uint16_t timeout )
   {
     Log *log = DefaultEnv::GetLog();
     log->Debug( UtilityMsg, "Checking if the data server %s supports tpc",
@@ -325,7 +325,8 @@ namespace XrdCl
     Buffer        queryArg; queryArg.FromString( "tpc" );
     Buffer       *queryResponse;
     XRootDStatus  st;
-    st = sourceDSFS.Query( QueryCode::Config, queryArg, queryResponse );
+    st = sourceDSFS.Query( QueryCode::Config, queryArg, queryResponse,
+                           timeout );
     if( !st.IsOK() )
     {
       log->Error( UtilityMsg, "Cannot query source data server %s: %s",
@@ -433,5 +434,21 @@ namespace XrdCl
                std::find_if( str.begin(), str.end(), isNotSpace ) );
     str.erase( std::find_if( str.rbegin(), str.rend(), isNotSpace ).base(),
                str.end() );
+  }
+
+  //----------------------------------------------------------------------------
+  // Log property list
+  //----------------------------------------------------------------------------
+  void Utils::LogPropertyList( Log                *log,
+                               uint64_t            topic,
+                               const char         *format,
+                               const PropertyList &list )
+  {
+    PropertyList::PropertyMap::const_iterator it;
+    std::string keyVals;
+    for( it = list.begin(); it != list.end(); ++it )
+      keyVals += "'" + it->first + "' = '" + it->second + "', ";
+    keyVals.erase( keyVals.length()-2, 2 );
+    log->Dump( topic, format, keyVals.c_str() );
   }
 }

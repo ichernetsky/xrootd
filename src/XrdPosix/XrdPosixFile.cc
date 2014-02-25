@@ -115,20 +115,24 @@ bool XrdPosixFile::Close(XrdCl::XRootDStatus &Status)
 
 bool XrdPosixFile::Finalize(XrdCl::XRootDStatus &Status)
 {
-// Setup the cache if it is to be used
-//
-   if (cOpt & XrdOucCache::optRW)
-      {    if (CacheW) XCio = CacheW->Attach((XrdOucCacheIO *)this, cOpt);}
-      else if (CacheR) XCio = CacheR->Attach((XrdOucCacheIO *)this, cOpt);
-
 // Indicate that we are at the start of the file
 //
    currOffset = 0;
 
 // Complete initialization. If the stat() fails, the caller will unwind the
 // whole open process (ick).
+
+   if (!Stat(Status))
+      return false;
+
+// Setup the cache if it is to be used
 //
-   return Stat(Status);
+   if (cOpt & XrdOucCache::optRW)
+   {    if (CacheW) XCio = CacheW->Attach((XrdOucCacheIO *)this, cOpt);}
+   else if (CacheR) XCio = CacheR->Attach((XrdOucCacheIO *)this, cOpt);
+
+
+   return true;
 }
   
 /******************************************************************************/
@@ -192,7 +196,7 @@ int XrdPosixFile::ReadV (const XrdOucIOVec *readV, int n)
 {
    XrdCl::XRootDStatus    Status;
    XrdCl::ChunkList       chunkVec;
-   XrdCl::VectorReadInfo *vrInfo;
+   XrdCl::VectorReadInfo *vrInfo = 0;
    int i, nbytes = 0;
 
 // Copy in the vector (would be nice if we didn't need to do this)

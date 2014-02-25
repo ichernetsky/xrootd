@@ -20,7 +20,7 @@ find_library( CPPUNIT_LIBRARIES cppunit
   $ENV{CPPUNIT_DIR}
   /usr
   /opt
-  PATH_SUFFIXES lib
+  PATH_SUFFIXES lib lib64
 )
 
 set(CPPUNIT_INCLUDE_DIRS ${CPPUNIT_INCLUDE_DIR})

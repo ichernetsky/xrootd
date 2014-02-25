@@ -943,6 +943,7 @@ int XrdCmsCluster::Select(XrdCmsSelect &Sel)
                        (retc == -2 ? "reachable " : ""),
                        Sel.Opts & XrdCmsSelect::Online ? "immediately " : "",
                        (smask ? "stage" : Amode))+1;
+          Say.Emsg("This is where it fails", "a", "b");
        return -1;
       }
 

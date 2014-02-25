@@ -25,6 +25,7 @@
 #include "XrdCl/XrdClLog.hh"
 #include "XrdCl/XrdClURL.hh"
 #include "XrdCl/XrdClXRootDResponses.hh"
+#include "XrdCl/XrdClPropertyList.hh"
 #include "XrdNet/XrdNetUtils.hh"
 
 #include <sys/time.h>
@@ -144,7 +145,8 @@ namespace XrdCl
       //------------------------------------------------------------------------
       //! Check if peer supports tpc
       //------------------------------------------------------------------------
-      static XRootDStatus CheckTPC( const std::string &server );
+      static XRootDStatus CheckTPC( const std::string &server,
+                                    uint16_t           timeout = 0 );
 
       //------------------------------------------------------------------------
       //! Convert the fully qualified host name to country code
@@ -167,6 +169,14 @@ namespace XrdCl
       //! Trim a string
       //------------------------------------------------------------------------
       static void Trim( std::string &str );
+
+      //------------------------------------------------------------------------
+      //! Log property list
+      //------------------------------------------------------------------------
+      static void LogPropertyList( Log                *log,
+                                   uint64_t            topic,
+                                   const char         *format,
+                                   const PropertyList &list );
   };
 
   //----------------------------------------------------------------------------

@@ -146,6 +146,7 @@ XrdConfig::XrdConfig() : Log(&Logger, "Xrd"), Trace(&Log), Sched(&Log, &Trace),
    repDest[1] = 0;
    repInt     = 600;
    repOpts    = 0;
+   ppNet      = 0;
    NetTCPlep  = -1;
    NetADM     = 0;
    memset(NetTCP, 0, sizeof(NetTCP));
@@ -206,7 +207,7 @@ int XrdConfig::Configure(int argc, char **argv)
    char *myArgv[myMaxc], argBuff[myMaxc*3+8];
    char *argbP = argBuff, *argbE = argbP+sizeof(argBuff)-4;
    char *ifList;
-   int   myArgc = 1, bindArg = -1;
+   int   myArgc = 1, bindArg = 1;
    bool ipV4 = false, pureLFN = false;
 
 // Obtain the protocol name we will be using
@@ -400,6 +401,7 @@ int XrdConfig::Configure(int argc, char **argv)
    XrdOucEnv::Export("XRDHOST", myName);
    XrdOucEnv::Export("XRDNAME", ProtInfo.myInst);
    XrdOucEnv::Export("XRDPROG", myProg);
+   XrdNetIF::SetMsgs(&Log);
 
 // Put out the herald
 //
@@ -417,11 +419,6 @@ int XrdConfig::Configure(int argc, char **argv)
 //
    Log.Say("++++++ ", myInstance, " initialization started.");
 
-// Export the network interface list at this point
-//
-   XrdNetIF::SetMsgs(&Log);
-   if (XrdNetIF::GetIF(ifList, 0, true)) XrdOucEnv::Export("XRDIFADDRS",ifList);
-
 // Process the configuration file, if one is present
 //
    if (ConfigFN && *ConfigFN)
@@ -435,6 +432,14 @@ int XrdConfig::Configure(int argc, char **argv)
       {Trace.What = TRACE_ALL;
        XrdSysThread::setDebug(&Log);
       }
+
+// Export the network interface list at this point
+//
+   if (ppNet && XrdNetIF::GetIF(ifList, 0, true))
+      XrdOucEnv::Export("XRDIFADDRS",ifList);
+
+// Now initialize the default protocl
+//
    if (!NoGo) NoGo = Setup(dfltProt);
 
 // If we hae a net name change the working directory
@@ -1119,7 +1124,9 @@ int XrdConfig::xbuf(XrdSysError *eDest, XrdOucStream &Config)
 
    Purpose:  To parse directive: network [wan] [keepalive] [buffsz <blen>]
                                          [cache <ct>] [[no]dnr]
-                                         {routes {split | common | local}}
+                                         [routes <rtype> <ifn1>,<ifn2>}]
+
+             <rtype>: split | common | local
 
              wan       parameters apply only to the wan port
              keepalive sets the socket keepalive option.
@@ -1172,6 +1179,13 @@ int XrdConfig::xnet(XrdSysError *eDest, XrdOucStream &Config)
                           else {eDest->Emsg("Config","Invalid routes argument -",val);
                                 return 1;
                                }
+                          if (!(val =  Config.GetWord()))
+                             {eDest->Emsg("Config", "network routes i/f names "
+                                                    "not specified.");
+                              return 1;
+                             }
+                          if (!XrdNetIF::SetIFNames(val)) return 1;
+                          ppNet = 1;
                           break;
                          }
                       if (ntopts[i].hasarg == 2)
