@@ -209,8 +209,16 @@ XrdFixedFile::~XrdFixedFile() { delete nativeFile; }
 int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
                        mode_t createMode, const XrdSecEntity *client,
                        const char *opaque) {
+  int ret;    
   FixedEroute.Say("XrdFixedFile::open");
-  return nativeFile->open(fileName, openMode, createMode, client, opaque);
+  
+  this->error.Reset();
+  nativeFile->error = this->error;
+ 
+  if ((ret = nativeFile->open(fileName, openMode, createMode, client, opaque)) != SFS_OK)
+    this->error = nativeFile->error;
+
+  return ret;
 }
 
 /* Close a file */
@@ -221,8 +229,17 @@ int XrdFixedFile::close() {
 
 /* Execute a special operation on the file */
 int XrdFixedFile::fctl(const int cmd, const char *args, XrdOucErrInfo &eInfo) {
+  
+  int ret;
   FixedEroute.Say("XrdFixedFile::fctnl");
-  return nativeFile->fctl(cmd, args, eInfo);
+  
+  this->error.Reset();
+  nativeFile->error = this->error;
+
+  if ((ret = nativeFile->fctl(cmd, args, eInfo)) != SFS_OK)
+      this->error = nativeFile->error;
+
+  return ret;
 }
 
 /* Get File Path */
@@ -278,20 +295,43 @@ int XrdFixedFile::stat(struct stat *buf) {
 
 /* Make sure all the outstanding data is actually written on the file (sync) */
 int XrdFixedFile::sync() {
+  
+  int ret;    
   FixedEroute.Say("XrdFixedFile::sync 1");
-  return nativeFile->sync();
+
+  this->error.Reset();
+  nativeFile->error = this->error;
+  if ((ret = nativeFile->sync()) != SFS_OK)
+      this->error = nativeFile->error;
+  
+  return ret;
 }
 
 /* Make sure all outstanding data is actually written to the file (async) */
 int XrdFixedFile::sync(XrdSfsAio *aiop) {
+  int ret;    
   FixedEroute.Say("XrdFixedFile::sync 2");
-  return nativeFile->sync(aiop);
+
+  this->error.Reset();
+  nativeFile->error = this->error;
+  if ((ret = nativeFile->sync(aiop)) != SFS_OK)
+      this->error = nativeFile->error;
+  
+  return ret;
 }
 
 /* Truncate the file */
 int XrdFixedFile::truncate(XrdSfsFileOffset fsize) {
+ int ret = 0;
+
   FixedEroute.Say("XrdFixedFile::truncate");
-  return nativeFile->truncate(fsize);
+
+  this->error.Reset();
+  nativeFile->error = this->error;
+  if ((ret = nativeFile->truncate(fsize)) != SFS_OK)
+      this->error = nativeFile->error;
+
+  return ret;
 }
 
 /* Get compression information on the file */
@@ -326,8 +366,16 @@ XrdFixedDirectory::~XrdFixedDirectory() {
 /* Open a directory. */
 int XrdFixedDirectory::open(const char *path, const XrdSecEntity *client,
                             const char *opaque) {
+  int ret;    
   FixedEroute.Say("XrdFixedDirectory::open");
-  return nativeDirectory->open(path, client, opaque);
+
+  this->error.Reset();
+  nativeDirectory->error = this->error;
+ 
+  if ((ret = nativeDirectory->open(path, client, opaque)) != SFS_OK)
+    this->error = nativeDirectory->error;
+
+  return ret;
 }
 
 /* Get the next directory entry. */
