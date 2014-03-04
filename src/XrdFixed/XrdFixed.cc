@@ -26,6 +26,8 @@
 /* specific prior written permission of the institution or contributor.       */
 /******************************************************************************/
 
+#include <stdio.h>
+
 #include "XrdFixed/XrdFixed.hh"
 
 #include "XrdVersion.hh"
@@ -209,8 +211,11 @@ XrdFixedFile::~XrdFixedFile() { delete nativeFile; }
 int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
                        mode_t createMode, const XrdSecEntity *client,
                        const char *opaque) {
-  int ret;    
-  FixedEroute.Say("XrdFixedFile::open");
+  int ret;
+  char msg[1024];
+  snprintf(msg, 1024, "XrdFixedFile::open fileName: %s, openMode: %d, createmode: %d, opaque: %s", 
+           fileName, openMode, createMode, opaque);
+  FixedEroute.Say(msg);
   
   this->error.Reset();
   nativeFile->error = this->error;
@@ -257,34 +262,71 @@ int XrdFixedFile::getMmap(void **Addr, off_t &Size) {
 /* Preread file blocks into the file system cache */
 XrdSfsXferSize XrdFixedFile::read(XrdSfsFileOffset offset,
                                   XrdSfsXferSize size) {
+  int ret;    
   FixedEroute.Say("XrdFixedFile::read 1");
-  return nativeFile->read(offset, size);
+  this->error.Reset();
+  nativeFile->error = this->error;
+
+  if ((ret = nativeFile->read(offset, size)) < 0)
+      this->error = nativeFile->error;
+
+  return ret;
 }
 
 /* Read file bytes into a buffer */
 XrdSfsXferSize XrdFixedFile::read(XrdSfsFileOffset offset, char *buffer,
                                   XrdSfsXferSize size) {
-  FixedEroute.Say("XrdFixedFile::read 1");
-  return nativeFile->read(offset, buffer, size);
+  int ret;
+  FixedEroute.Say("XrdFixedFile::read 2");
+
+  this->error.Reset();
+  nativeFile->error = this->error;
+
+  if ((ret = nativeFile->read(offset, buffer, size)) < 0)
+      this->error = nativeFile->error;
+
+  return ret;
 }
 
 /* Read file bytes using asychronous I/O */
 XrdSfsXferSize XrdFixedFile::read(XrdSfsAio *aioparam) {
-  FixedEroute.Say("XrdFixedFile::read 2");
-  return nativeFile->read(aioparam);
+  int ret;
+  FixedEroute.Say("XrdFixedFile::read 3");
+
+  this->error.Reset();
+  nativeFile->error = this->error;
+
+  if ((ret = nativeFile->read(aioparam)) < 0)
+      this->error = nativeFile->error;
+
+  return ret;
 }
 
 /* Write file bytes from a buffer */
 XrdSfsXferSize XrdFixedFile::write(XrdSfsFileOffset offset, const char *buffer,
                                    XrdSfsXferSize size) {
+  int ret;    
   FixedEroute.Say("XrdFixedFile::write 1");
-  return nativeFile->write(offset, buffer, size);
+  this->error.Reset();
+  nativeFile->error = this->error;
+
+  if ((ret = nativeFile->write(offset, buffer, size)) < 0)
+      this->error = nativeFile->error;
+
+  return ret;
 }
 
 /* Write file bytes using asynchronous I/O */
 int XrdFixedFile::write(XrdSfsAio *aioparam) {
+  int ret;
   FixedEroute.Say("XrdFixedFile::write 2");
-  return nativeFile->write(aioparam);
+  this->error.Reset();
+  nativeFile->error = this->error;
+
+  if ((ret = nativeFile->write(aioparam)) < 0)
+      this->error = nativeFile->error;
+
+  return ret;
 }
 
 /* Return state information on the file */
