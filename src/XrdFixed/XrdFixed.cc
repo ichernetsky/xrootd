@@ -61,7 +61,11 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
     FixedEroute.Say("Error: native file system object can not be null");
     return NULL;
   }
+  
   XrdFixedFS.setNativeFS(nativeFS);
+  XrdFixedFS.setWriteRedirector(new XrdFixedRedirector(configFN, 
+                                                       FixedEroute, 
+                                                       FixedTrace));
 
   return &XrdFixedFS;
 }
@@ -75,7 +79,10 @@ XrdFixed::XrdFixed() : nativeFS(NULL) {}
 /*****************************************************************************/
 /*                  X r d F i x e d   d e s t r u c t o r                    */
 /*****************************************************************************/
-XrdFixed::~XrdFixed() { delete nativeFS; }
+XrdFixed::~XrdFixed() { 
+    delete nativeFS; 
+    delete writeRedirector;
+}
 
 /*****************************************************************************/
 /*                                                                           */
@@ -186,6 +193,8 @@ int XrdFixed::truncate(const char *path, XrdSfsFileOffset fsize,
 /*           X r d F i x e d   i n t e r n a l  f u n c t i o n s            */
 /*****************************************************************************/
 void XrdFixed::setNativeFS(XrdSfsFileSystem *native) { nativeFS = native; }
+void XrdFixed::setWriteRedirector(XrdFixedRedirector* r) { writeRedirector = r; }
+XrdFixedRedirector* XrdFixed::getWriteRedirector() { return writeRedirector; }
 
 /*****************************************************************************/
 /*                                                                           */
@@ -212,11 +221,60 @@ int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
                        mode_t createMode, const XrdSecEntity *client,
                        const char *opaque) {
   int ret;
-  char msg[1024];
-  snprintf(msg, 1024, "XrdFixedFile::open fileName: %s, openMode: %d, createmode: %d, opaque: %s", 
-           fileName, openMode, createMode, opaque);
+  const int msg_len = 2048;
+  char msg[msg_len] = {0};
+
+  const int open_flag_len = 1024;
+  char open_flags[open_flag_len] = {0};
+  //int flags_index = 0;
+
+  snprintf(msg, 2048, "XrdFixedFile::open fileName: %s, openMode: %s, createmode: %d, opaque: %s", 
+           fileName, open_flags, createMode, opaque);
   FixedEroute.Say(msg);
   
+  /* if someone is trying to open file for moficications redirect to the right node ... */
+  if ((openMode & SFS_O_WRONLY) || (openMode & SFS_O_RDWR) || 
+      (openMode & SFS_O_CREAT) || (openMode & SFS_O_TRUNC)) {
+
+      //char dataNode[1024] = {0};
+      this->error.setErrInfo(1094, XrdFixedFS.getWriteRedirector()->node(fileName));
+      return SFS_REDIRECT;
+  } 
+
+  /* flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_WRONLY");   
+  flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_RDWR");    
+  flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_CREAT");  
+  flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_TRUNC");  
+      
+  if (openMode == SFS_O_RDONLY) // SFS_O_RDONLY is 0
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_RDONLY"); 
+  if (openMode & SFS_O_POSC) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_POSC");   
+  if (openMode & SFS_O_FORCE) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_FORCE");   
+  if (openMode & SFS_O_HNAME) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_HNAME");   
+  if (openMode & SFS_O_LOCAL) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_LOCAL");   
+  if (openMode & SFS_O_NOWAIT) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_NOWAIT");
+  if (openMode & SFS_O_RAWIO) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_RAWIO");
+  if (openMode & SFS_O_RESET) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_RESET");   
+  if (openMode & SFS_O_REPLICA) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_REPLICA");   
+  if (openMode & SFS_O_MKPTH) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_MKPTH");
+  if (openMode & SFS_O_LOCATE) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_LOCATE");
+  if (openMode & SFS_O_STAT) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_STAT");
+  if (openMode & SFS_O_META) 
+      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_META");
+  */
+
+  /* ...otherwise pass the request through */
   this->error.Reset();
   nativeFile->error = this->error;
  

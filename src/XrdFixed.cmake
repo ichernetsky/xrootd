@@ -13,7 +13,8 @@ set( XRD_FIXED_SOVERSION 1 )
 add_library(
   XrdFixed
   SHARED
-  XrdFixed/XrdFixed.cc    XrdFixed/XrdFixed.hh )
+  XrdFixed/XrdFixed.cc    XrdFixed/XrdFixed.hh 
+  XrdFixed/XrdFixedRedirector.cc XrdFixed/XrdFixedRedirector.hh )
 
 target_link_libraries(
   XrdFixed )

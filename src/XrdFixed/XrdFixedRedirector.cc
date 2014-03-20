@@ -37,6 +37,9 @@ XrdFixedRedirector::XrdFixedRedirector(const char* configFN,
                                         XrdOucTrace& FixedTrace) {
 }
 
+XrdFixedRedirector::~XrdFixedRedirector() {
+}
+
 /* Given a file name return a node name where the file should be created */
 const char* XrdFixedRedirector::node(const char* path) {
     return 0;
