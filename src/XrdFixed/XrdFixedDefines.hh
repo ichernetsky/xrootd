@@ -1,8 +1,8 @@
-#ifndef __XRD_FIXED_REDIRECTOR_H__
-#define __XRD_FIXED_REDIRECTOR_H__
+#ifndef __XRD_FIXED_DEFINES_H__
+#define __XRD_FIXED_DEFINES_H__
 /******************************************************************************/
 /*                                                                            */
-/*               X r d F i x e d R e d i r e c t o r. h h                     */
+/*                             X r d F i x e d . h h                          */
 /*                                                                            */
 /* (c) 2014 Qualys. Inc.                                                      */
 /* Author: Artem Harutyunyan (hartem_at_qualys_dot_com)                       */
@@ -28,34 +28,8 @@
 /* specific prior written permission of the institution or contributor.       */
 /******************************************************************************/
 
-/*****************************************************************************/
-/*                  C l a s s    X r d F i x e d R e d i r e c t o r         */
-/*****************************************************************************/
+#define XRD_FIXED_MAX_CLUSTER_SIZE 64
+#define XRD_FIXED_MAX_HOSTNAME_LEN 255
 
-#include "XrdSys/XrdSysError.hh"
-#include "XrdOuc/XrdOucTrace.hh"
-
-#include "XrdFixed/XrdFixedDefines.hh"
-
-class XrdFixedRedirector {
-public:
-
-  /* Get node name for a given file name */
-  const char *node(const char* path);
-
-  /* Return number of nodes */
-  long getnNodes();
-
-  /* Constructor and Destructor */
-  XrdFixedRedirector(const char* configFN, XrdSysError& FixedEroute, XrdOucTrace& FixedTrace);
-  virtual ~XrdFixedRedirector();
-
-private:
-    char nodes[XRD_FIXED_MAX_CLUSTER_SIZE - 1][XRD_FIXED_MAX_HOSTNAME_LEN + 1];
-    long nNodes;
-    XrdSysError& Eroute; 
-    XrdOucTrace& Trace;
-}; // class XrdFixedRedirector
-
-#endif // __XRD_FIXED_REDIRECTOR_H__
+#endif // __XRD_FIXED_DEFINES_H__
 

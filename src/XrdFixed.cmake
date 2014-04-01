@@ -10,14 +10,18 @@ set( XRD_FIXED_SOVERSION 1 )
 #-------------------------------------------------------------------------------
 # The XrdClient lib
 #-------------------------------------------------------------------------------
+include_directories( ${OPENSSL_INCLUDE_DIR} )
+
 add_library(
   XrdFixed
   SHARED
-  XrdFixed/XrdFixed.cc    XrdFixed/XrdFixed.hh 
+  XrdFixed/XrdFixedDefines.hh
+  XrdFixed/XrdFixed.cc           XrdFixed/XrdFixed.hh 
   XrdFixed/XrdFixedRedirector.cc XrdFixed/XrdFixedRedirector.hh )
 
 target_link_libraries(
-  XrdFixed )
+  XrdFixed 
+  ${OPENSSL_LIBRARIES} )
 
 set_target_properties(
   XrdFixed

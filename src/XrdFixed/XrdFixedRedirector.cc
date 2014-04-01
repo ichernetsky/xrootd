@@ -26,15 +26,84 @@
 /* specific prior written permission of the institution or contributor.       */
 /******************************************************************************/
 
+#include <openssl/md5.h>
+#include <string.h>
+#include <fcntl.h>
+
+#include "XrdOuc/XrdOucEnv.hh"
+#include "XrdOuc/XrdOucStream.hh"
 #include "XrdFixed/XrdFixedRedirector.hh"
 
 
 /*****************************************************************************/
 /*      X r d F i x e d R e d i r e c t o r  c o n s t r u c t o r           */
 /*****************************************************************************/
-XrdFixedRedirector::XrdFixedRedirector(const char* configFN, 
-                                        XrdSysError& FixedEroute, 
-                                        XrdOucTrace& FixedTrace) {
+XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN, 
+                                       XrdSysError& FixedEroute, 
+                                       XrdOucTrace& FixedTrace) : 
+    Eroute(FixedEroute), 
+    Trace(FixedTrace) {
+
+    XrdOucEnv myEnv;
+    XrdOucStream Config(NULL, getenv("XRDINSTANCE"), &myEnv, "=====> ");
+    int cfgFD;
+    char *var;
+    
+    if (!ConfigFN || !*ConfigFN)
+        FixedEroute.Emsg("Config", "Configuration file not specified");
+    else {
+        /* Try to open a config file */
+        if ((cfgFD = open(ConfigFN, O_RDONLY, 0)) <= 0) {
+            FixedEroute.Emsg("Config", errno, "open config file ", ConfigFN);
+           
+            return;
+        }
+        Config.Attach(cfgFD);
+
+        /* Read the data server list */
+        while ((var = Config.GetMyFirstWord())) {
+            if (strncmp(var, "fixed.hosts", 11) == 0) {
+
+                if (!(var = Config.GetWord())) {
+                    FixedEroute.Emsg("Config", "Number of servers not specified for fixed.hosts");
+                    nNodes = 0;
+                    return;
+                }
+                
+                /* Get the number of servers */
+                nNodes = strtol(var, NULL, 10);
+                if (nNodes < 1 || nNodes > 63) {
+                    FixedEroute.Emsg("Config", "number of servers for fixed.hosts should be between 1 - 63");
+                    return;
+                }
+                 
+                long i = nNodes;
+                /* Iterate over the list of nodes */
+                while (i > 0) {
+                    if (!(var = Config.GetWord())) 
+                        break;
+
+                    unsigned int nHost = strlen(var);
+                    if (nHost > XRD_FIXED_MAX_HOSTNAME_LEN) {
+                        FixedEroute.Emsg("Config", "fixed.hosts hostname too long");
+                        nNodes = 0;
+                        return;
+                    }
+                    strncpy(nodes[nNodes - i], var, XRD_FIXED_MAX_HOSTNAME_LEN + 1);
+                    FixedEroute.Emsg("Config", "Got", nodes[nNodes - i]);
+                    --i;
+                }
+                
+                if (i != 0) {
+                    FixedEroute.Emsg("Config", "fixed.hosts server number mismatch");
+                    nNodes = 0;
+                    return;
+                }
+            }
+        }
+
+    }
+
 }
 
 XrdFixedRedirector::~XrdFixedRedirector() {
@@ -42,6 +111,19 @@ XrdFixedRedirector::~XrdFixedRedirector() {
 
 /* Given a file name return a node name where the file should be created */
 const char* XrdFixedRedirector::node(const char* path) {
-    return 0;
+    unsigned char result[MD5_DIGEST_LENGTH];
+    
+    MD5((const unsigned char*) path, strlen(path), result);
+    
+    /* use the first byte of the checksum to see which node to choose */
+    unsigned int nodeIndex = result[0] % nNodes;
+    Eroute.Emsg("XrdFixedRedirector", path, nodes[nodeIndex]);
+    return nodes[nodeIndex];
 }
+
+/* Return a number of available nodes */
+long XrdFixedRedirector::getnNodes() {
+    return nNodes;
+}
+
 

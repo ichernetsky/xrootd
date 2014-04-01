@@ -58,14 +58,19 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
   FixedEroute.Say("(c) 2014 Qualys Inc. XrdFixed version " XrdVSTRING);
 
   if (nativeFS == NULL) {
-    FixedEroute.Say("Error: native file system object can not be null");
+    FixedEroute.Emsg("XrdFixed", "native file system object can not be null");
     return NULL;
   }
   
   XrdFixedFS.setNativeFS(nativeFS);
-  XrdFixedFS.setWriteRedirector(new XrdFixedRedirector(configFN, 
-                                                       FixedEroute, 
-                                                       FixedTrace));
+  XrdFixedRedirector* writeRedirector = new XrdFixedRedirector(configFN, FixedEroute, FixedTrace);
+
+  if (writeRedirector->getnNodes() < 1) {
+    FixedEroute.Emsg("XrdFixed", "data node configuration error");
+    return NULL;
+  }
+
+  XrdFixedFS.setWriteRedirector(writeRedirector);
 
   return &XrdFixedFS;
 }
@@ -80,8 +85,7 @@ XrdFixed::XrdFixed() : nativeFS(NULL) {}
 /*                  X r d F i x e d   d e s t r u c t o r                    */
 /*****************************************************************************/
 XrdFixed::~XrdFixed() { 
-    delete nativeFS; 
-    delete writeRedirector;
+    if (writeRedirector) delete writeRedirector;
 }
 
 /*****************************************************************************/
@@ -236,43 +240,12 @@ int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
   if ((openMode & SFS_O_WRONLY) || (openMode & SFS_O_RDWR) || 
       (openMode & SFS_O_CREAT) || (openMode & SFS_O_TRUNC)) {
 
-      //char dataNode[1024] = {0};
-      this->error.setErrInfo(1094, XrdFixedFS.getWriteRedirector()->node(fileName));
+      const char *dataNode = (XrdFixedFS.getWriteRedirector()->node(fileName));
+      
+      FixedEroute.Say("Redirecting to ", dataNode);
+      this->error.setErrInfo(1094, dataNode);
       return SFS_REDIRECT;
   } 
-
-  /* flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_WRONLY");   
-  flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_RDWR");    
-  flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_CREAT");  
-  flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_TRUNC");  
-      
-  if (openMode == SFS_O_RDONLY) // SFS_O_RDONLY is 0
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_RDONLY"); 
-  if (openMode & SFS_O_POSC) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_POSC");   
-  if (openMode & SFS_O_FORCE) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_FORCE");   
-  if (openMode & SFS_O_HNAME) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_HNAME");   
-  if (openMode & SFS_O_LOCAL) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_LOCAL");   
-  if (openMode & SFS_O_NOWAIT) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_NOWAIT");
-  if (openMode & SFS_O_RAWIO) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_RAWIO");
-  if (openMode & SFS_O_RESET) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_RESET");   
-  if (openMode & SFS_O_REPLICA) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_REPLICA");   
-  if (openMode & SFS_O_MKPTH) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_MKPTH");
-  if (openMode & SFS_O_LOCATE) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_LOCATE");
-  if (openMode & SFS_O_STAT) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_STAT");
-  if (openMode & SFS_O_META) 
-      flags_index += snprintf(&open_flags[flags_index], 1024 - flags_index, "%s ", "SFS_O_META");
-  */
 
   /* ...otherwise pass the request through */
   this->error.Reset();
