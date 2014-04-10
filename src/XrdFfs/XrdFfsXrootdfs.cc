@@ -187,7 +187,7 @@ static int xrootdfs_getattr(const char *path, struct stat *stbuf)
         res = XrdFfsPosix_stat(rootpath, stbuf);
     }
     else
-        res = XrdFfsPosix_statall(xrootdfs.rdr, path, stbuf, fuse_get_context()->uid);
+        res = XrdFfsPosix_stat(xrootdfs.rdr, path, stbuf, fuse_get_context()->uid);
 
 //    seteuid(getuid());
 //    setegid(getgid());
