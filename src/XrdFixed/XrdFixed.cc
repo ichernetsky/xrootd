@@ -141,7 +141,8 @@ int XrdFixed::exists(const char *path, XrdSfsFileExistence &eFlag,
 int XrdFixed::mkdir(const char *path, XrdSfsMode mode, XrdOucErrInfo &eInfo,
                     const XrdSecEntity *client, const char *opaque) {
   FixedEroute.Say("XrdFixed::mkdir");
-  return nativeFS->mkdir(path, mode, eInfo, client, opaque);
+  return redirect(path, eInfo);
+  //return nativeFS->mkdir(path, mode, eInfo, client, opaque);
 }
 
 /* Prepare a file for future processing */
@@ -155,7 +156,8 @@ int XrdFixed::prepare(XrdSfsPrep &pargs, XrdOucErrInfo &eInfo,
 int XrdFixed::rem(const char *path, XrdOucErrInfo &eInfo,
                   const XrdSecEntity *client, const char *opaque) {
   FixedEroute.Say("XrdFixed::rem");
-  return nativeFS->rem(path, eInfo, client, opaque);
+  return redirect(path, eInfo);
+  //return nativeFS->rem(path, eInfo, client, opaque);
 }
 
 /* Remove directory */
@@ -176,12 +178,15 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
 /* Return state information on file or a directory */
 int XrdFixed::stat(const char *name, struct stat *buf, XrdOucErrInfo &eInfo,
                    const XrdSecEntity *client, const char *opaque) {
-  FixedEroute.Say("XrdFixed::stat");
+  FixedEroute.Say("XrdFixed::stat 5");
+  //return redirect(name, eInfo);
+
   return nativeFS->stat(name, buf, eInfo, client, opaque);
 }
 int XrdFixed::stat(const char *name, mode_t &mod, XrdOucErrInfo &eInfo,
                    const XrdSecEntity *client, const char *opaque) {
-  FixedEroute.Say("XrdFixed::stat");
+  FixedEroute.Say("XrdFixed::stat 5.1");
+  //return redirect(name, eInfo);
   return nativeFS->stat(name, mod, eInfo, client, opaque);
 }
 
@@ -198,7 +203,17 @@ int XrdFixed::truncate(const char *path, XrdSfsFileOffset fsize,
 /*****************************************************************************/
 void XrdFixed::setNativeFS(XrdSfsFileSystem *native) { nativeFS = native; }
 void XrdFixed::setWriteRedirector(XrdFixedRedirector* r) { writeRedirector = r; }
+
+/* Redirect a request to the right node */
+int XrdFixed::redirect(const char* path, XrdOucErrInfo &eInfo) {
+  const char *dataNode = (writeRedirector->node(path));
+  eInfo.Reset();
+  eInfo.setErrInfo(1094, dataNode);
+  return SFS_REDIRECT;
+}
+
 XrdFixedRedirector* XrdFixed::getWriteRedirector() { return writeRedirector; }
+
 
 /*****************************************************************************/
 /*                                                                           */
@@ -237,7 +252,8 @@ int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
   FixedEroute.Say(msg);
   
   /* if someone is trying to open file for moficications redirect to the right node ... */
-  if ((openMode & SFS_O_WRONLY) || (openMode & SFS_O_RDWR) || 
+  if ( 1 || /* always redirect for now */
+      (openMode & SFS_O_WRONLY) || (openMode & SFS_O_RDWR) || 
       (openMode & SFS_O_CREAT) || (openMode & SFS_O_TRUNC)) {
 
       const char *dataNode = (XrdFixedFS.getWriteRedirector()->node(fileName));

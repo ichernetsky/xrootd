@@ -193,9 +193,12 @@ public:
   /* Internal functions */
   void setNativeFS(XrdSfsFileSystem *nativeFS);
   void setWriteRedirector(XrdFixedRedirector *r);
-  XrdFixedRedirector* getWriteRedirector();
 
+  XrdFixedRedirector* getWriteRedirector();
+    
 private:
+  int redirect(const char* name, XrdOucErrInfo &eInfo);    
+
   XrdSfsFileSystem *nativeFS;   
   XrdFixedRedirector *writeRedirector;
 }; // XrdFixedFileSystem
