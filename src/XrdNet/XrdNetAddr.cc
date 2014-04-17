@@ -93,9 +93,9 @@ struct addrinfo *XrdNetAddr::Hints(int htype, int stype)
 // in a static constructor since the addrinfo layout differs by OS-type.
 //
    memset(&theHints[htype], 0, sizeof(struct addrinfo));;
-   if (htype) theHints[htype].ai_flags    = AI_V4MAPPED | AI_ALL;
+   if (htype) theHints[htype].ai_flags    = AI_V4MAPPED | AI_ADDRCONFIG;
        else   theHints[htype].ai_flags    = AI_V4MAPPED | AI_CANONNAME;
-   theHints[htype].ai_family   = AF_INET6;
+   theHints[htype].ai_family   = AF_UNSPEC;
    theHints[htype].ai_socktype = stype;
    return &theHints[htype];
 }
@@ -366,8 +366,9 @@ const char *XrdNetAddr::Set(const struct sockaddr *sockP, int sockFD)
 
 /******************************************************************************/
   
-const char *XrdNetAddr::Set(int sockFD)
+const char *XrdNetAddr::Set(int sockFD, bool peer)
 {
+   int rc;
 
 // Clear translation if set
 //
@@ -376,9 +377,11 @@ const char *XrdNetAddr::Set(int sockFD)
    addrSize = sizeof(sockaddr_in6);
    sockNum = sockFD;
 
-// Get the address on the other side of this socket
+// Get the address on the appropriate side of this socket
 //
-   if (getpeername(sockFD, &IP.Addr, &addrSize) < 0)
+   if (peer) rc = getpeername(sockFD, &IP.Addr, &addrSize);
+      else   rc = getsockname(sockFD, &IP.Addr, &addrSize);
+   if (rc < 0)
       {addrSize = 0;
        return strerror(errno);
       }
@@ -458,4 +461,34 @@ void XrdNetAddr::SetIPV4()
    huntHintsUDP->ai_family   = AF_INET;
 
    useIPV4 = true;
+
+// Inform NetUtils that we changed mode
+//
+   XrdNetUtils::SetAuto(XrdNetUtils::onlyIPv4);
+}
+
+/******************************************************************************/
+/*                               S e t I P V 6                                */
+/******************************************************************************/
+  
+void XrdNetAddr::SetIPV6()
+{
+
+// To force IPV6 mode we merely change the hints structure and set the IPV4
+// mode flag to accept IPV6 address.
+//
+   hostHints->ai_flags    = AI_V4MAPPED | AI_CANONNAME;
+   hostHints->ai_family   = AF_INET6;
+
+   huntHintsTCP->ai_flags    = AI_V4MAPPED | AI_ALL;
+   huntHintsTCP->ai_family   = AF_INET6;
+
+   huntHintsUDP->ai_flags    = AI_V4MAPPED | AI_ALL;
+   huntHintsUDP->ai_family   = AF_INET6;
+
+   useIPV4 = false;
+
+// Inform NetUtils that we changed mode
+//
+   XrdNetUtils::SetAuto(XrdNetUtils::allIPMap);
 }

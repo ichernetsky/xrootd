@@ -121,7 +121,7 @@ int XrdOfs::Configure(XrdSysError &Eroute, XrdOucEnv *EnvInfo) {
   Output:   0 upon success or !0 otherwise.
 */
    extern XrdOss *XrdOssGetSS(XrdSysLogger *, const char *, const char *,
-                                              const char *, XrdVersionInfo &);
+                              const char   *, XrdOucEnv  *, XrdVersionInfo &);
    char *var;
    const char *tmp;
    int  i, j, cfgFD, retc, NoGo = 0;
@@ -246,8 +246,7 @@ int XrdOfs::Configure(XrdSysError &Eroute, XrdOucEnv *EnvInfo) {
 // Now configure the storage system
 //
    if (!(XrdOfsOss = XrdOssGetSS(Eroute.logger(), ConfigFN, OssLib, OssParms,
-                                 XrdVERSIONINFOVAR(XrdOfs)))) NoGo = 1;
-      else XrdOfsTPC::Init(XrdOfsOss);
+                                 EnvInfo, XrdVERSIONINFOVAR(XrdOfs)))) NoGo = 1;
 
 // Initialize redirection.  We type te herald here to minimize confusion
 //
@@ -1283,7 +1282,8 @@ int XrdOfs::xrole(XrdOucStream &Config, XrdSysError &Eroute)
                                          [logok] [xfr <n>] [allow <parms>]
                                          [require {all|client|dest} <auth>[+]]
                                          [restrict <path>] [streams <num>]
-                                         [pgm <path> [parms]]
+                                         [echo] [scan {stderr | stdout}]
+                                         [autorm] [pgm <path> [parms]]
 
              parms: [dn <name>] [group <grp>] [host <hn>] [vo <vo>]
 
@@ -1301,6 +1301,10 @@ int XrdOfs::xrole(XrdOucStream &Config, XrdSysError &Eroute)
                      valid authentication mechanisms. If the <auth> is suffixed
                      by a plus, then the request must also be encrypted using
                      the authentication's session key.
+             echo    echo the pgm's output to the log.
+             autorm  Remove file when copy fails.
+             scan    scan fr error messages either in stderr or stdout. The
+                     default is to scan both.
              pgm     specifies the transfer command with optional paramaters.
                      It must be the last parameter on the line.
 
@@ -1326,7 +1330,17 @@ int XrdOfs::xtpc(XrdOucStream &Config, XrdSysError &Eroute)
              Parms.Ckst = strdup(val);
              continue;
             }
+         if (!strcmp(val, "scan"))
+            {if (!(val = Config.GetWord()))
+                {Eroute.Emsg("Config","scan type not specified"); return 1;}
+                  if (strcmp(val, "stderr")) Parms.Grab = -2;
+             else if (strcmp(val, "stdout")) Parms.Grab = -1;
+                {Eroute.Emsg("Config","invalid scan type -",val); return 1;}
+             continue;
+            }
+         if (!strcmp(val, "echo"))  {Parms.xEcho = 1; continue;}
          if (!strcmp(val, "logok")) {Parms.Logok = 1; continue;}
+         if (!strcmp(val, "autorm")){Parms.autoRM = 1; continue;}
          if (!strcmp(val, "pgm"))
             {if (!Config.GetRest(pgm, sizeof(pgm)))
                 {Eroute.Emsg("Config", "tpc command line too long"); return 1;}

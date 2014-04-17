@@ -35,6 +35,8 @@
 #include <sys/resource.h>
 #include <sys/uio.h>
 
+#include "Xrd/XrdScheduler.hh"
+
 #include "XrdCl/XrdClDefaultEnv.hh"
 #include "XrdCl/XrdClFileSystem.hh"
 #include "XrdCl/XrdClFile.hh"
@@ -57,6 +59,11 @@
 /******************************************************************************/
 /*                        S t a t i c   M e m b e r s                         */
 /******************************************************************************/
+
+namespace XrdPosixGlobals
+{
+XrdScheduler  *schedP = 0;
+};
 
 XrdOucCache   *XrdPosixXrootd::myCache  =  0;
 int            XrdPosixXrootd::baseFD    = 0;
@@ -141,9 +148,24 @@ int XrdPosixXrootd::Close(int fildes)
    if (!(fP = XrdPosixObject::ReleaseFile(fildes)))
       {errno = EBADF; return -1;}
 
-   ret = fP->Close(Status);
-   delete fP;
-   return (ret ? 0 : XrdPosixMap::Result(Status));
+   if (fP->XCio->ioActive())
+   {
+      if (XrdPosixGlobals::schedP )
+      {
+         XrdPosixGlobals::schedP->Schedule(fP);
+      }
+      else {
+         pthread_t tid;
+         XrdSysThread::Run(&tid, XrdPosixFile::DelayedDestroy, fP, 0, "PosixFileDestroy");
+      }
+      return 0;
+   }
+   else
+   {
+      ret = fP->Close(Status);
+      delete fP;
+      return (ret ? 0 : XrdPosixMap::Result(Status));
+   }
 }
 
 /******************************************************************************/
@@ -186,16 +208,20 @@ int XrdPosixXrootd::endPoint(int FD, char *Buff, int Blen)
 
 // Make sure we can fit result in the buffer
 //
-   if (fp->clFile.GetDataServer().size() >= (uint32_t)Blen)
+   std::string dataServer;
+   fp->clFile.GetProperty( "DataServer", dataServer );
+   XrdCl::URL dataServerUrl = dataServer;
+
+   if (dataServer.size() >= (uint32_t)Blen)
       {fp->UnLock(); return -ENAMETOOLONG;}
 
 // Copy the data server location
 //
-   strcpy(Buff, fp->clFile.GetDataServer().c_str());
+   strcpy(Buff, dataServer.c_str());
 
 // Get the port and return it
 //
-   uPort = fp->clFile.GetLastURL().GetPort();
+   uPort = dataServerUrl.GetPort();
    fp->UnLock();
    return uPort;
 }
@@ -1266,6 +1292,15 @@ void XrdPosixXrootd::setIPV4(bool usev4)
 // Set the env value
 //
    env->PutString((std::string)"NetworkStack", (const std::string)ipmode);
+}
+  
+/******************************************************************************/
+/*                              s e t S c h e d                               */
+/******************************************************************************/
+
+void XrdPosixXrootd::setSched(XrdScheduler *sP)
+{
+    XrdPosixGlobals::schedP = sP;
 }
   
 /******************************************************************************/

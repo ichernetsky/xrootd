@@ -217,12 +217,6 @@ bool AllOptionsSupported( XrdCpConfig *config )
     return false;
   }
 
-  if( config->Want( XrdCpConfig::DoServer ) )
-  {
-    std::cerr << "Running in server mode is not yet supported" << std::endl;
-    return false;
-  }
-
   return true;
 }
 
@@ -458,6 +452,7 @@ int main( int argc, char **argv )
   bool         force     = false;
   bool         coerce    = false;
   bool         makedir   = false;
+  bool         dynSrc    = false;
   std::string thirdParty = "none";
 
   if( config.Want( XrdCpConfig::DoPosc ) )     posc       = true;
@@ -466,6 +461,7 @@ int main( int argc, char **argv )
   if( config.Want( XrdCpConfig::DoTpc ) )      thirdParty = "first";
   if( config.Want( XrdCpConfig::DoTpcOnly ) )  thirdParty = "only";
   if( config.Want( XrdCpConfig::DoRecurse ) )  makedir    = true;
+  if( config.Want( XrdCpConfig::DoDynaSrc ) )  dynSrc     = true;
 
   //----------------------------------------------------------------------------
   // Checksums
@@ -533,7 +529,7 @@ int main( int argc, char **argv )
   }
 
   log->Dump( AppMsg, "Chunk size: %d, parallel chunks %d, streams: %d",
-             config.nStrm, chunkSize, parallelChunks );
+             chunkSize, parallelChunks, config.nStrm );
 
   //----------------------------------------------------------------------------
   // Build the URLs
@@ -649,6 +645,7 @@ int main( int argc, char **argv )
     properties.Set( "posc",           posc           );
     properties.Set( "coerce",         coerce         );
     properties.Set( "makeDir",        makedir        );
+    properties.Set( "dynamicSource",  dynSrc         );
     properties.Set( "thirdParty",     thirdParty     );
     properties.Set( "checkSumMode",   checkSumMode   );
     properties.Set( "checkSumType",   checkSumType   );

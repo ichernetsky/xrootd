@@ -207,7 +207,8 @@ namespace XrdCl
                   realTarget.GetURL().c_str(), st.ToStr().c_str() );
       return st;
     }
-    realTarget = targetFile.GetLastURL();
+    std::string lastUrl; targetFile.GetProperty( "LastURL", lastUrl );
+    realTarget = lastUrl;
 
     //--------------------------------------------------------------------------
     // Generate the source CGI
@@ -244,12 +245,21 @@ namespace XrdCl
         return XRootDStatus( stError, errOperationExpired );
       }
       else
-        timeLeft =- (now-start);
+        timeLeft -= (now-start);
     }
 
     //--------------------------------------------------------------------------
-    // Open the source and set up the rendez-vous
+    // Set up the rendez-vous and open the source
     //--------------------------------------------------------------------------
+    st = targetFile.Sync( tpcTimeout );
+    if( !st.IsOK() )
+    {
+      log->Error( UtilityMsg, "Unable set up rendez-vous: %s",
+                   st.ToStr().c_str() );
+      targetFile.Close();
+      return st;
+    }
+
     File sourceFile;
     st = sourceFile.Open( tpcSource.GetURL(), OpenFlags::Read, Access::None,
                           timeLeft );
@@ -259,16 +269,6 @@ namespace XrdCl
       log->Error( UtilityMsg, "Unable to open source %s: %s",
                   tpcSource.GetURL().c_str(), st.ToStr().c_str() );
       targetFile.Close(1);
-      return st;
-    }
-
-    st = targetFile.Sync( tpcTimeout );
-    if( !st.IsOK() )
-    {
-      log->Error( UtilityMsg, "Unable set up rendez-vous: %s",
-                   st.ToStr().c_str() );
-      sourceFile.Close();
-      targetFile.Close();
       return st;
     }
 
@@ -495,7 +495,9 @@ namespace XrdCl
       st.status = stFatal;
       return st;
     }
-    properties->Set( "tpcSource", sourceFile.GetLastURL().GetURL() );
+    std::string sourceUrl; sourceFile.GetProperty( "LastURL", sourceUrl );
+    URL         sourceUrlU = sourceUrl;
+    properties->Set( "tpcSource", sourceUrl );
     StatInfo *statInfo;
     sourceFile.Stat( false, statInfo );
     properties->Set( "sourceSize", statInfo->GetSize() );
@@ -507,7 +509,7 @@ namespace XrdCl
       if( now-start > timeLeft )
         timeLeft = 1; // we still want to send a close, but we time it out fast
       else
-        timeLeft =- (now-start);
+        timeLeft -= (now-start);
     }
 
     sourceFile.Close( timeLeft );
@@ -518,10 +520,10 @@ namespace XrdCl
       if( now-start > timeLeft )
         return XRootDStatus( stError, errOperationExpired );
       else
-        timeLeft =- (now-start);
+        timeLeft -= (now-start);
     }
 
-    st = Utils::CheckTPC( sourceFile.GetLastURL().GetHostId(), timeLeft );
+    st = Utils::CheckTPC( sourceUrlU.GetHostId(), timeLeft );
     if( !st.IsOK() )
       return st;
 

@@ -91,7 +91,22 @@ XrdPosixFile::~XrdPosixFile()
 //
    if (fPath) free(fPath);
 }
-  
+
+/******************************************************************************/
+/*                   D e l a y e d D e s t r o y                              */
+/******************************************************************************/
+
+void* XrdPosixFile::DelayedDestroy(void* vpf)
+{
+// Static function.
+// Called within a dedicated thread if XrdOucCacheIO is io-active.
+
+   XrdPosixFile* pf = (XrdPosixFile*)vpf;
+   delete pf;
+
+   return 0;
+}
+
 /******************************************************************************/
 /*                                 C l o s e                                  */
 /******************************************************************************/
@@ -168,7 +183,8 @@ void XrdPosixFile::HandleResponse(XrdCl::XRootDStatus *status,
   
 const char *XrdPosixFile::Path()
 {
-   if (!fPath) fPath = strdup(clFile.GetLastURL().GetURL().c_str());
+   std::string fileUrl; clFile.GetProperty( "LastURL", fileUrl );
+   if (!fPath) fPath = strdup(fileUrl.c_str());
    return fPath;
 }
 
@@ -183,8 +199,8 @@ int XrdPosixFile::Read (char *Buff, long long Offs, int Len)
 
 // Issue read and return appropriately
 //
-   Status = XrdPosixMap::Result(clFile.Read((uint64_t)Offs, (uint32_t)Len,
-                                                      Buff,           bytes));
+   Status = clFile.Read((uint64_t)Offs, (uint32_t)Len, Buff, bytes);
+
    return (Status.IsOK() ? (int)bytes : XrdPosixMap::Result(Status));
 }
   
@@ -248,4 +264,15 @@ bool XrdPosixFile::Stat(XrdCl::XRootDStatus &Status, bool force)
 //
    delete sInfo;
    return true;
+}
+
+/******************************************************************************/
+/*                                  D o I t                                   */
+/******************************************************************************/
+void XrdPosixFile::DoIt()
+{
+// Virtual function of XrdJob.
+// Called from XrdPosixXrootd::Close if the file is still IO active.
+
+   delete this;
 }

@@ -131,6 +131,7 @@ int XrdNetAddrInfo::Format(char *bAddr, int bLen, fmtUse theFmt, int fmtOpts)
                      if (fmtOpts & old6Map4) {strcpy(bAddr, "[::"); n = 3;}
                         else {strcpy(bAddr, "[::ffff:"); n = 8;}
                      if (ipRaw) {strcpy(bAddr, bAddr+1); n--;}
+                     addBrak = 1;
                     }
             if (!inet_ntop(AF_INET, &(IP.v4.sin_addr),bAddr+n,bLen-n))
                return QFill(bAddr, bLen);
@@ -156,17 +157,6 @@ int XrdNetAddrInfo::Format(char *bAddr, int bLen, fmtUse theFmt, int fmtOpts)
    if ((n = snprintf(bAddr, bLen, pFmt, pNum)) >= bLen)
       return QFill(bAddr, bLen);
    return totLen+n;
-}
-
-/******************************************************************************/
-/*                              i s I P T y p e                               */
-/******************************************************************************/
-  
-bool XrdNetAddrInfo::isIPType(IPType ipType) const
-{
-   return (ipType ? IP.Addr.sa_family == AF_INET6
-                  : IP.Addr.sa_family == AF_INET
-          );
 }
 
 /******************************************************************************/

@@ -1,7 +1,9 @@
 //------------------------------------------------------------------------------
-// Copyright (c) 2011-2012 by European Organization for Nuclear Research (CERN)
+// Copyright (c) 2011-2014 by European Organization for Nuclear Research (CERN)
 // Author: Lukasz Janyst <ljanyst@cern.ch>
 //------------------------------------------------------------------------------
+// This file is part of the XRootD software suite.
+//
 // XRootD is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
@@ -14,6 +16,10 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with XRootD.  If not, see <http://www.gnu.org/licenses/>.
+//
+// In applying this licence, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
 //------------------------------------------------------------------------------
 
 #include "XrdCl/XrdClStream.hh"
@@ -177,11 +183,6 @@ namespace XrdCl
                                                     0 );
     s->SetStream( this );
 
-    if( pAddressType == Utils::IPv4 )
-      s->SetSocketDomain( AF_INET );
-    else
-      s->SetSocketDomain( AF_INET6 );
-
     pSubStreams.push_back( new SubStreamData() );
     pSubStreams[0]->socket = s;
     return Status();
@@ -293,7 +294,8 @@ namespace XrdCl
     //--------------------------------------------------------------------------
     // Decide on the path to send the message
     //--------------------------------------------------------------------------
-    PathID path = pTransport->MultiplexSubStream( msg, *pChannelData );
+    PathID path = pTransport->MultiplexSubStream( msg, pStreamNum,
+                                                  *pChannelData );
     if( pSubStreams.size() <= path.up )
     {
       log->Warning( PostMasterMsg, "[%s] Unable to send message %s through "
@@ -312,7 +314,7 @@ namespace XrdCl
     Status st = EnableLink( path );
     if( st.IsOK() )
     {
-      pTransport->MultiplexSubStream( msg, *pChannelData, &path );
+      pTransport->MultiplexSubStream( msg, pStreamNum, *pChannelData, &path );
       pSubStreams[path.up]->outQueue->PushBack( msg, handler,
                                                 expires, stateful );
     }
@@ -414,20 +416,23 @@ namespace XrdCl
     msg->SetSessionId( pSessionId );
     pBytesReceived += bytesReceived;
 
+    uint32_t streamAction = pTransport->MessageReceived( msg, pStreamNum,
+                                                         subStream,
+                                                         *pChannelData );
+    if( streamAction & TransportHandler::DigestMsg )
+      return;
+
     //--------------------------------------------------------------------------
     // No handler, we cache and see what comes later
     //--------------------------------------------------------------------------
     Log *log = DefaultEnv::GetLog();
     InMessageHelper &mh = pSubStreams[subStream]->inMsgHelper;
+
     if( !mh.handler )
     {
       log->Dump( PostMasterMsg, "[%s] Queuing received message: 0x%x.",
                  pStreamName.c_str(), msg );
 
-      uint32_t streamAction = pTransport->StreamAction( msg, *pChannelData );
-
-      if( streamAction & TransportHandler::DigestMsg )
-        return;
       pJobManager->QueueJob( pQueueIncMsgJob, msg );
       return;
     }
@@ -488,6 +493,8 @@ namespace XrdCl
                               Message  *msg,
                               uint32_t  bytesSent )
   {
+    pTransport->MessageSent( msg, pStreamNum, subStream, bytesSent,
+                             *pChannelData );
     OutMessageHelper &h = pSubStreams[subStream]->outMsgHelper;
     pBytesSent += bytesSent;
     if( h.handler )
@@ -847,6 +854,7 @@ namespace XrdCl
     //--------------------------------------------------------------------------
     Log *log = DefaultEnv::GetLog();
     SubStreamList::iterator it;
+    time_t                  now = time(0);
 
     XrdSysMutexHelper scopedLock( pMutex );
     uint32_t outgoingMessages = 0;
@@ -861,7 +869,8 @@ namespace XrdCl
 
     if( !outgoingMessages )
     {
-      bool disconnect = pTransport->IsStreamTTLElapsed( time(0)-lastActivity,
+      bool disconnect = pTransport->IsStreamTTLElapsed( now-lastActivity,
+                                                        pStreamNum,
                                                         *pChannelData );
       if( disconnect )
       {
@@ -870,6 +879,15 @@ namespace XrdCl
         Disconnect();
       }
     }
+
+    //--------------------------------------------------------------------------
+    // Check if the stream is broken
+    //--------------------------------------------------------------------------
+    Status st = pTransport->IsStreamBroken( now-lastActivity,
+                                            pStreamNum,
+                                            *pChannelData );
+    if( !st.IsOK() )
+      OnError( substream, st );
   }
 
   //----------------------------------------------------------------------------
