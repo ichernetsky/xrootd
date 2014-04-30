@@ -184,8 +184,14 @@ static int xrootdfs_getattr(const char *path, struct stat *stbuf)
         XrdFfsMisc_xrd_secsss_editurl(rootpath, fuse_get_context()->uid, 0);
         res = XrdFfsPosix_stat(rootpath, stbuf);
     }
-    else
-        res = XrdFfsPosix_stat(path, stbuf);
+    else {
+        //res = XrdFfsPosix_stat(xrootdfs.rdr, path, stbuf, fuse_get_context->uid());
+        strcat(rootpath, xrootdfs.rdr);
+        strcat(rootpath, path);
+        res = XrdFfsPosix_stat(rootpath, stbuf);
+        if (res != 0 && errno == ELOOP)
+            res = XrdFfsPosix_statall(xrootdfs.rdr, path, stbuf, fuse_get_context()->uid);
+    }
 
 //    seteuid(getuid());
 //    setegid(getgid());

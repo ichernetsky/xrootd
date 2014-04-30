@@ -179,15 +179,15 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
 int XrdFixed::stat(const char *name, struct stat *buf, XrdOucErrInfo &eInfo,
                    const XrdSecEntity *client, const char *opaque) {
   FixedEroute.Say("XrdFixed::stat 5");
-  //return redirect(name, eInfo);
+  return redirect(name, eInfo);
 
-  return nativeFS->stat(name, buf, eInfo, client, opaque);
+  //return nativeFS->stat(name, buf, eInfo, client, opaque);
 }
 int XrdFixed::stat(const char *name, mode_t &mod, XrdOucErrInfo &eInfo,
                    const XrdSecEntity *client, const char *opaque) {
   FixedEroute.Say("XrdFixed::stat 5.1");
-  //return redirect(name, eInfo);
-  return nativeFS->stat(name, mod, eInfo, client, opaque);
+  return redirect(name, eInfo);
+  //return nativeFS->stat(name, mod, eInfo, client, opaque);
 }
 
 /* Truncate a file */
