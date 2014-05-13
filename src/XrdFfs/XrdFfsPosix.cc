@@ -797,7 +797,7 @@ int XrdFfsPosix_statall(const char *rdrurl, const char *path, struct stat *stbuf
     }
 #endif
     res = -1;
-    errno = ENOENT;
+    errno = ELOOP;
     for (i = 0; i < nurls; i++)
         if (res_i[i] == 0) 
         {
@@ -806,10 +806,10 @@ int XrdFfsPosix_statall(const char *rdrurl, const char *path, struct stat *stbuf
             memcpy((void*)stbuf, (void*)(&stbuf_i[i]), sizeof(struct stat));
             break;
         }
-        else if (res_i[i] != 0 && errno_i[i] == 125) // when host i is down
+        else if (res_i[i] != 0 && errno_i[i] == ELOOP) // when host i is down
         {
             res = -1;
-            errno = ETIMEDOUT;
+            errno = ELOOP;
             syslog(LOG_WARNING, "WARNING: stat(%s) failed (connection timeout)", newurls[i]);
         }
 
