@@ -34,6 +34,10 @@
 #include "XrdSys/XrdSysError.hh"
 #include "XrdOuc/XrdOucTrace.hh"
 
+#include "XrdCl/XrdClCopyProcess.hh"
+#include "XrdCl/XrdClFileSystem.hh"
+#include "XrdCl/XrdClURL.hh"
+
 /*****************************************************************************/
 /*                  X r d F i x e d   E r r o r  r o u t i n g               */
 /*****************************************************************************/
@@ -172,7 +176,71 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
                      const XrdSecEntity *client, const char *opaqueO,
                      const char *opaqueN) {
   FixedEroute.Say("XrdFixed::rename");
-  return nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
+  printf("src file is: %s dst file is: %s\n", oPath, nPath);
+
+  /* use native when sourece and destintation belong to the same node */
+  const char *srcNode = (XrdFixedFS.getWriteRedirector()->node(oPath));
+  const char *tgtNode = (XrdFixedFS.getWriteRedirector()->node(nPath));
+
+  if (strncmp(srcNode, tgtNode, XRD_FIXED_MAX_HOSTNAME_LEN + 1) == 0)
+      return nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
+
+  char srcUrl[XRD_FIXED_MAX_URL_LEN] = {0};
+  char tgtUrl[XRD_FIXED_MAX_URL_LEN] = {0};
+  
+  if (snprintf(srcUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:1094/%s", srcNode, oPath) >= XRD_FIXED_MAX_URL_LEN) {
+      const char* err = "Error: source url length exceeds the limit";
+      FixedEroute.Say(err);
+      eInfo.setErrInfo(-1, err);
+      return SFS_ERROR;
+  }
+  if (snprintf(tgtUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:1094/%s", tgtNode, nPath) >= XRD_FIXED_MAX_URL_LEN) {
+      const char* err = "Error: target url length exceeds the limit";
+      FixedEroute.Say(err);
+      eInfo.setErrInfo(-1, err);
+      return SFS_ERROR;
+  }
+
+  // Else copy the file and then rename 
+  //return nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
+  XrdCl::CopyProcess cp;
+  XrdCl::PropertyList properties, results;
+  properties.Set("source", srcUrl);
+  properties.Set("target", tgtUrl);
+  //properties.Set("thirdParty", "only");
+
+  XrdCl::XRootDStatus st;
+  st = cp.AddJob(properties, &results); 
+  if (!st.IsOK()) {
+      FixedEroute.Say("Error: adding copy job failed ", st.ToString().c_str());
+      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
+      return SFS_ERROR; 
+  }
+
+  st = cp.Prepare(); 
+  if (!st.IsOK()) {
+      FixedEroute.Say("Error: prepare failed for copy job ", st.ToString().c_str());
+      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
+      return SFS_ERROR;
+  }
+  st = cp.Run(0); 
+  if (!st.IsOK()) {
+      FixedEroute.Say("Error: run failed for copy job ", st.ToString().c_str());
+      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
+      return SFS_ERROR;
+  }
+
+  // Remove original file 
+  std::string strSrcNode(srcNode);
+  XrdCl::FileSystem fs(strSrcNode);
+  st = fs.Rm(oPath);
+  if (!st.IsOK()) {
+      FixedEroute.Say("Error: Could not remove original file ");
+      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
+      return SFS_ERROR;    
+  }
+
+  return SFS_OK;
 }
 
 /* Return state information on file or a directory */
@@ -235,6 +303,7 @@ XrdFixedFile::XrdFixedFile(char *user, int MonID) {
 /*****************************************************************************/
 XrdFixedFile::~XrdFixedFile() { delete nativeFile; }
 
+
 /* Open a file */
 int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
                        mode_t createMode, const XrdSecEntity *client,
@@ -251,26 +320,23 @@ int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
            fileName, open_flags, createMode, opaque);
   FixedEroute.Say(msg);
   
-  /* if someone is trying to open file for moficications redirect to the right node ... */
-  if ( 1 || /* always redirect for now */
-      (openMode & SFS_O_WRONLY) || (openMode & SFS_O_RDWR) || 
-      (openMode & SFS_O_CREAT) || (openMode & SFS_O_TRUNC)) {
-
-      const char *dataNode = (XrdFixedFS.getWriteRedirector()->node(fileName));
-      
-      FixedEroute.Say("Redirecting to ", dataNode);
-      this->error.setErrInfo(1094, dataNode);
-      return SFS_REDIRECT;
-  } 
-
-  /* ...otherwise pass the request through */
-  this->error.Reset();
-  nativeFile->error = this->error;
+  /* if someone is not trying to modify the file pass the request through */
+  if (!(openMode & SFS_O_WRONLY) && !(openMode & SFS_O_RDWR) && 
+      !(openMode & SFS_O_CREAT) && !(openMode & SFS_O_TRUNC) && 
+      !(openMode & SFS_O_MKPTH) && !(SFS_O_RESET)) {
+      this->error.Reset();
+      nativeFile->error = this->error;
  
-  if ((ret = nativeFile->open(fileName, openMode, createMode, client, opaque)) != SFS_OK)
-    this->error = nativeFile->error;
+      if ((ret = nativeFile->open(fileName, openMode, createMode, client, opaque)) != SFS_OK)
+          this->error = nativeFile->error;
+      return ret;      
+  }
 
-  return ret;
+  /* otherwise, always redirect */
+  const char *dataNode = (XrdFixedFS.getWriteRedirector()->node(fileName));
+  FixedEroute.Say("Redirecting to ", dataNode);
+  this->error.setErrInfo(1094, dataNode);
+  return SFS_REDIRECT;
 }
 
 /* Close a file */

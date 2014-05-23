@@ -21,6 +21,7 @@ add_library(
 
 target_link_libraries(
   XrdFixed 
+  XrdCl
   ${OPENSSL_LIBRARIES} )
 
 set_target_properties(
