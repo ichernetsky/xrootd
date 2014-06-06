@@ -176,7 +176,6 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
                      const XrdSecEntity *client, const char *opaqueO,
                      const char *opaqueN) {
   FixedEroute.Say("XrdFixed::rename");
-  printf("src file is: %s dst file is: %s\n", oPath, nPath);
 
   /* use native when sourece and destintation belong to the same node */
   const char *srcNode = (XrdFixedFS.getWriteRedirector()->node(oPath));
