@@ -398,16 +398,25 @@ namespace XrdCl
         o << urlComponents[0];
         if( rsp->body.redirect.port != -1 )
           o << ":" << rsp->body.redirect.port << "/";
-        pUrl = URL( o.str() );
-        if( !pUrl.IsValid() )
+
+        URL newUrl = URL( o.str() );
+        if( !newUrl.IsValid() )
         {
           pStatus = Status( stError, errInvalidRedirectURL );
           log->Error( XRootDMsg, "[%s] Got invalid redirection URL: %s",
-                                pUrl.GetHostId().c_str(), urlInfo.c_str() );
+                      pUrl.GetHostId().c_str(), urlInfo.c_str() );
           HandleResponse();
           return;
         }
-        pRedirectUrl = pUrl.GetURL();
+
+        if( pUrl.GetUserName() != "" && newUrl.GetUserName() == "" )
+          newUrl.SetUserName( pUrl.GetUserName() );
+
+        if( pUrl.GetPassword() != "" && newUrl.GetPassword() == "" )
+          newUrl.SetPassword( pUrl.GetPassword() );
+
+        pUrl         = newUrl;
+        pRedirectUrl = newUrl.GetURL();
 
         URL cgiURL;
         if( urlComponents.size() > 1 )
@@ -496,11 +505,24 @@ namespace XrdCl
         }
 
         //----------------------------------------------------------------------
-        // Register a task to resend the message in some seconds
+        // Register a task to resend the message in some seconds, if we still
+        // have time to do that, and report a timeout otherwise
         //----------------------------------------------------------------------
-        TaskManager *taskMgr = pPostMaster->GetTaskManager();
-        taskMgr->RegisterTask( new WaitTask( this ),
-                               ::time(0)+waitSeconds );
+        time_t resendTime = ::time(0)+waitSeconds;
+
+        if( resendTime < pExpiration )
+        {
+          TaskManager *taskMgr = pPostMaster->GetTaskManager();
+          taskMgr->RegisterTask( new WaitTask( this ), resendTime );
+        }
+        else
+        {
+          log->Debug( XRootDMsg, "[%s] Wait time is too long, timing out %s",
+                      pUrl.GetHostId().c_str(),
+                      pRequest->GetDescription().c_str() );
+          pStatus   = Status( stError, errOperationExpired );
+          HandleResponse();
+        }
         return;
       }
 
@@ -796,6 +818,12 @@ namespace XrdCl
       // We've seen a reading error
       //------------------------------------------------------------------------
       if( !st.IsOK() )
+        return st;
+
+      //------------------------------------------------------------------------
+      // If we are not done reading the header, return back to the event loop.
+      //------------------------------------------------------------------------
+      if( st.IsOK() && st.code != suDone )
         return st;
     }
 

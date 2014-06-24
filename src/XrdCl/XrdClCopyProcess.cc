@@ -141,8 +141,13 @@ namespace XrdCl
 
       props.Get( "source", tmp );
       URL source = tmp;
+      if( !source.IsValid() )
+        return XRootDStatus( stError, errInvalidArgs, 0, "invalid source" );
+
       props.Get( "target", tmp );
       URL target = tmp;
+      if( !target.IsValid() )
+        return XRootDStatus( stError, errInvalidArgs, 0, "invalid target" );
 
       bool tpc         = false;
       bool tpcFallBack = false;
@@ -189,9 +194,9 @@ namespace XrdCl
         XRootDStatus st = ThirdPartyCopyJob::CanDo( source, target, &props );
 
         if( st.IsOK() )
-          job = new ThirdPartyCopyJob( &props, res );
+          job = new ThirdPartyCopyJob( i+1, &props, res );
         else if( tpcFallBack && !st.IsFatal() )
-          job = new ClassicCopyJob( &props, res );
+          job = new ClassicCopyJob( i+1, &props, res );
         else
         {
           CleanUpJobs();
@@ -200,7 +205,7 @@ namespace XrdCl
         }
       }
       else
-        job = new ClassicCopyJob( &props, res );
+        job = new ClassicCopyJob( i+1, &props, res );
 
       pJobs.push_back( job );
     }
@@ -262,7 +267,7 @@ namespace XrdCl
       }
 
       if( progress )
-        progress->EndJob( (*it)->GetResults() );
+        progress->EndJob( currentJob, (*it)->GetResults() );
       if( !st.IsOK() ) return st;
       ++currentJob;
     }

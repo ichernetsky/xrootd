@@ -36,6 +36,7 @@
 #include "XrdOuc/XrdOucErrInfo.hh"
 #include "XrdOuc/XrdOucUtils.hh"
 #include "XrdSys/XrdSysTimer.hh"
+#include "XrdSys/XrdSysPlugin.hh"
 
 #include <arpa/inet.h>
 #include <sys/types.h>
@@ -44,6 +45,8 @@
 #include <sstream>
 #include <iomanip>
 #include <set>
+
+XrdVERSIONINFOREF( XrdCl );
 
 namespace XrdCl
 {
@@ -147,8 +150,7 @@ namespace XrdCl
   //----------------------------------------------------------------------------
   XRootDTransport::~XRootDTransport()
   {
-    if( pSecLibHandle )
-      dlclose( pSecLibHandle );
+    delete pSecLibHandle; pSecLibHandle = 0;
   }
 
   //----------------------------------------------------------------------------
@@ -1235,9 +1237,13 @@ namespace XrdCl
     free( hostName );
     char *cgiBuffer = new char[1024];
     std::string appName;
+    std::string monInfo;
     env->GetString( "AppName", appName );
-    snprintf( cgiBuffer, 1024, "?xrd.cc=%s&xrd.tz=%d&xrd.appname=%s",
-              countryCode.c_str(), timeZone, appName.c_str() );
+    env->GetString( "MonInfo", monInfo );
+    snprintf( cgiBuffer, 1024,
+              "?xrd.cc=%s&xrd.tz=%d&xrd.appname=%s&xrd.info=%s",
+              countryCode.c_str(), timeZone, appName.c_str(),
+              monInfo.c_str() );
     uint16_t cgiLen = strlen( cgiBuffer );
 
     //--------------------------------------------------------------------------
@@ -1252,6 +1258,15 @@ namespace XrdCl
     loginReq->ability   = kXR_fullurl | kXR_readrdok | kXR_multipr;
     loginReq->role[0]   = kXR_useruser;
     loginReq->dlen      = cgiLen;
+
+    XrdNetUtils::NetProt stacks    = XrdNetUtils::NetConfig();
+    bool                 dualStack = false;
+
+    if( (stacks & 0x03) == XrdNetUtils::hasIP64 )
+    {
+      dualStack = true;
+      loginReq->ability  |= kXR_hasipv64;
+    }
 
     if( hsData->url->GetUserName().length() )
     {
@@ -1271,8 +1286,9 @@ namespace XrdCl
     msg->Append( cgiBuffer, cgiLen, 24 );
 
     log->Debug( XRootDTransportMsg, "[%s] Sending out kXR_login request, "
-                "username: %s, cgi: %s", hsData->streamName.c_str(),
-                loginReq->username, cgiBuffer );
+                "username: %s, cgi: %s, dual-stack: %s",
+                hsData->streamName.c_str(), loginReq->username, cgiBuffer,
+                dualStack ? "true" : "false");
 
     delete [] cgiBuffer;
     MarshallRequest( msg );
@@ -1357,7 +1373,7 @@ namespace XrdCl
       URL::ParamsMap::const_iterator it;
       for( it = urlParams.begin(); it != urlParams.end(); ++it )
       {
-        if( it->first.compare( 0, 7, "XrdSec." ) )
+        if( it->first.compare( 0, 4, "xrd." ) )
           continue;
 
         info->authEnv->Put( it->first.c_str(), it->second.c_str() );
@@ -1528,7 +1544,7 @@ namespace XrdCl
       info->authProtocol = (*authHandler)( hsData->url->GetHostName().c_str(),
                                            *srvAddr,
                                            *info->authParams,
-                                           0 );
+                                           &ei );
       if( !info->authProtocol )
       {
         log->Error( XRootDTransportMsg, "[%s] No protocols left to try",
@@ -1582,29 +1598,21 @@ namespace XrdCl
     if( pAuthHandler )
       return pAuthHandler;
 
-    //--------------------------------------------------------------------------
-    // dlopen the library
-    //--------------------------------------------------------------------------
+    char errorBuff[1024];
     std::string libName = "libXrdSec"; libName += LT_MODULE_EXT;
-    pSecLibHandle = ::dlopen( libName.c_str(), RTLD_NOW );
-    if( !pSecLibHandle )
-    {
-      log->Error( XRootDTransportMsg,
-                  "Unable to load the authentication library %s: %s",
-                  libName.c_str(), ::dlerror() );
-      return 0;
-    }
+    pSecLibHandle = new XrdSysPlugin( errorBuff, 1024, libName.c_str(),
+                                      libName.c_str(),
+                                      &XrdVERSIONINFOVAR( XrdCl ) );
 
-    //--------------------------------------------------------------------------
-    // Get the authentication function handle
-    //--------------------------------------------------------------------------
-    pAuthHandler = (XrdSecGetProt_t)dlsym( pSecLibHandle, "XrdSecGetProtocol" );
+    pAuthHandler = (XrdSecGetProt_t)pSecLibHandle->getPlugin(
+      "XrdSecGetProtocol", false, false );
+
     if( !pAuthHandler )
     {
       log->Error( XRootDTransportMsg,
                   "Unable to get the XrdSecGetProtocol symbol from library "
-                  "%s: %s", libName.c_str(), ::dlerror() );
-      ::dlclose( pSecLibHandle );
+                  "%s: %s", libName.c_str(), errorBuff );
+      delete pSecLibHandle;
       pSecLibHandle = 0;
       return 0;
     }
@@ -1874,8 +1882,14 @@ namespace XrdCl
           o << "none";
         else
         {
-          if( sreq->options == kXR_refresh )
-            o << "kXR_refresh";
+          if( sreq->options & kXR_refresh )
+            o << "kXR_refresh ";
+          if( sreq->options & kXR_prefname )
+            o << "kXR_prefname ";
+          if( sreq->options & kXR_nowait )
+            o << "kXR_nowait ";
+          if( sreq->options & kXR_force )
+            o << "kXR_force ";
         }
         o << ")";
         break;

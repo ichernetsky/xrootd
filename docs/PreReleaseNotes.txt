@@ -4,5 +4,18 @@ XRootD
 
 Prerelease Notes
 ================
-  * fix xrootdfs wcache crashing issue when using virtual file descriptor.  
+
++ **New Features**
+   * Pass along XRD_MONINFO setting and application name to monitoring.
+   * Set client location information.
+
++ **Major bug fixes**
+
++ **Minor bug fixes**
+   * Provide full error mapping for POSIX interface.
+   * Prevent over-scan of the xrd.network routes option which may cause
+     a config file error message and initialization failure.
+
++ **Miscellaneous**
+   * Efficiently handle replicated subscribers (i.e. managers).
 

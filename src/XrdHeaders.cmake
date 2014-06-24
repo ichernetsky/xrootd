@@ -34,6 +34,7 @@ set( XROOTD_PUBLIC_HEADERS
   XrdNet/XrdNet.hh
   XrdNet/XrdNetAddr.hh
   XrdNet/XrdNetAddrInfo.hh
+  XrdNet/XrdNetUtils.hh
   XrdNet/XrdNetCmsNotify.hh
   XrdNet/XrdNetConnect.hh
   XrdNet/XrdNetOpts.hh
@@ -93,6 +94,7 @@ set( XROOTD_PUBLIC_HEADERS
   XrdSys/XrdSysXSLock.hh
   XrdXrootd/XrdXrootdMonData.hh
   XrdXrootd/XrdXrootdBridge.hh
+  XrdHttp/XrdHttpSecXtractor.hh
 )
 
 set( XROOTD_PRIVATE_HEADERS

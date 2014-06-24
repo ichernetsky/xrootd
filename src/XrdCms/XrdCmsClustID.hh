@@ -1,13 +1,12 @@
-#ifndef __XRDCKSCALCMD5_HH__
-#define __XRDCKSCALCMD5_HH__
+#ifndef __XRDCMSCLUSTID_HH__
+#define __XRDCMSCLUSTID_HH__
 /******************************************************************************/
 /*                                                                            */
-/*                      X r d C k s C a l c m d 5 . h h                       */
+/*                      X r d C m s C l u s t I D . h h                       */
 /*                                                                            */
-/* (c) 2011 by the Board of Trustees of the Leland Stanford, Jr., University  */
-/*                            All Rights Reserved                             */
+/* (c) 2014 by the Board of Trustees of the Leland Stanford, Jr., University  */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
-/*              DE-AC02-76-SFO0515 with the Department of Energy              */
+/*                DE-AC02-76-SFO0515 with the Deprtment of Energy             */
 /*                                                                            */
 /* This file is part of the XRootD software suite.                            */
 /*                                                                            */
@@ -30,55 +29,51 @@
 /* specific prior written permission of the institution or contributor.       */
 /******************************************************************************/
 
-#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "XrdCks/XrdCksCalc.hh"
-  
-class XrdCksCalcmd5 : public XrdCksCalc
+class XrdLink;
+class XrdCmsNode;
+
+#include "XrdCms/XrdCmsTypes.hh"
+
+class XrdCmsClustID
 {
 public:
 
-char       *Current()
-                   {MD5Context saveCTX = myContext;
-                    char *md5P = Final();
-                    myContext = saveCTX;
-                    return (char *)md5P;
-                   }
+static XrdCmsClustID *AddID(const char *cID);
 
-void        Init();
+       bool           AddNode(XrdCmsNode *nP, bool isMan);
 
-XrdCksCalc *New() {return (XrdCksCalc *)new XrdCksCalcmd5;}
+inline bool           Avail()    {return npNum < altMax;}
 
-char       *Final();
+       bool           Exists(XrdLink *lp, const char *nid, int port);
 
-void        Update(const char *Buff, int BLen)
-                  {MD5Update((unsigned char *)Buff,(unsigned)BLen);}
+static XrdCmsClustID *Find(const char *cID);
 
-const char *Type(int &csSz) {csSz = sizeof(myDigest); return "md5";}
+static SMask_t        Mask(const char *cID);
 
-            XrdCksCalcmd5() {Init();}
-           ~XrdCksCalcmd5() {}
+inline bool           IsEmpty()  {return npNum < 1;}
+
+inline bool           IsSingle() {return npNum == 1;}
+
+       XrdCmsNode    *RemNode(XrdCmsNode *nP);
+
+inline int            Slot()     {return ntSlot;}
+
+       XrdCmsClustID() : cidMask(0), cidName(0), ntSlot(-1), npNum(0)
+                         {memset(nodeP, 0, sizeof(nodeP));}
+
+      ~XrdCmsClustID() {if (cidName) free(cidName);}
 
 private:
-  
-struct MD5Context
-      {unsigned int  buf[4];
-union {long long     b64;
-       unsigned int  bits[2];
-      };
-union {long long     i64[8];
-       unsigned char in[64];
-      };
-      };
 
-MD5Context    myContext;
-unsigned char myDigest[16];
+static const int   altMax = 8;
 
-void byteReverse(unsigned char *buf, unsigned longs);
-void MD5Update(unsigned char const *buf, unsigned int len);
-
-#ifndef ASM_MD5
-void MD5Transform(unsigned int buf[4], unsigned int const in[16]);
-#endif
+       SMask_t     cidMask;
+       char       *cidName;
+       int         ntSlot;
+       int         npNum;
+       XrdCmsNode *nodeP[altMax];
 };
 #endif

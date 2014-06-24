@@ -53,6 +53,17 @@
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
 //                                                                           //
+// Extensions OID relevant for proxies                                       //
+//                                                                           //
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
+
+// X509v3 Key Usage: critical
+#define KEY_USAGE_OID  "2.5.29.15"
+// X509v3 Subject Alternative Name: must be absent
+#define SUBJ_ALT_NAME_OID  "2.5.29.17"
+
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
+//                                                                           //
 // VOMS relevant stuff                                                       //
 //                                                                           //
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
@@ -621,6 +632,7 @@ int XrdSslgsiX509CreateProxy(const char *fnc, const char *fnk,
          return -kErrPX_SetPathDepth;
       }
    }
+
    //
    // create extension
    X509_EXTENSION *ext = X509_EXTENSION_new();
@@ -665,7 +677,9 @@ int XrdSslgsiX509CreateProxy(const char *fnc, const char *fnk,
       PRINT("could not create stack for extensions"); 
       return -kErrPX_NoResources;
    }
-   if (sk_X509_EXTENSION_push(esk, ext) != 1) {
+   //
+   // Now we add the new extension
+   if (sk_X509_EXTENSION_push(esk, ext) == 0) {
       PRINT("could not push the extension in the stack"); 
       return -kErrPX_Error;
    }
@@ -728,6 +742,37 @@ int XrdSslgsiX509CreateProxy(const char *fnc, const char *fnk,
    if (!X509_gmtime_adj(X509_get_notAfter(xPX), valid)) {
       PRINT("could not set notAfter"); 
       return -kErrPX_SetAttribute;
+   }
+
+   // First duplicate the extensions of the EE certificate
+   X509_EXTENSION *xEECext = 0;
+   int nEECext = X509_get_ext_count(xEEC);
+   DEBUG("number of extensions found in the original certificate: "<< nEECext);
+   int i = 0;
+   bool haskeyusage = 0;
+   for (i = 0; i< nEECext; i++) {
+      xEECext = X509_get_ext(xEEC, i);
+      char s[256];
+      OBJ_obj2txt(s, sizeof(s), X509_EXTENSION_get_object(xEECext), 1);
+      // Flag key usage extension
+      if (!haskeyusage && !strcmp(s, KEY_USAGE_OID)) haskeyusage = 1;
+      // Skip subject alternative name extension
+      if (!strcmp(s, SUBJ_ALT_NAME_OID)) continue;
+      // Duplicate and add to the stack
+      X509_EXTENSION *xEECextdup = X509_EXTENSION_dup(xEECext);
+      if (X509_add_ext(xPX, xEECextdup, -1) == 0) {
+         PRINT("could not push the extension '"<<s<<"' in the stack"); 
+         return -kErrPX_Error;
+      }
+      // Notify what we added
+      int crit = X509_EXTENSION_get_critical(xEECextdup);
+      DEBUG("added extension '"<<s<<"', critical: " << crit);
+   }
+
+   // Warn if the critical oen is missing
+   if (!haskeyusage) {
+      PRINT(">>> WARNING: critical extension 'Key Usage' not found in original certificate! ");
+      PRINT(">>> WARNING: this proxy may not be accepted by some parsers. ");
    }
 
    // Add the extension
@@ -923,15 +968,28 @@ int XrdSslgsiX509CreateProxyReq(XrdCryptoX509 *xcpi,
       return -kErrPX_NoResources;
    }
    //
+   // Create a stack
+   STACK_OF(X509_EXTENSION) *esk = sk_X509_EXTENSION_new_null();
+   if (!esk) {
+      PRINT("could not create stack for extensions"); 
+      return -kErrPX_NoResources;
+   }
+   //
    // Get signature path depth from present proxy
    X509_EXTENSION *xpiext = 0;
    int npiext = X509_get_ext_count(xpi);
    int i = 0;
+   bool haskeyusage = 0;
    int indepthlen = -1;
    for (i = 0; i< npiext; i++) {
       xpiext = X509_get_ext(xpi, i);
       char s[256];
       OBJ_obj2txt(s, sizeof(s), X509_EXTENSION_get_object(xpiext), 1);
+      // Flag key usage extension
+      if (!haskeyusage && !strcmp(s, KEY_USAGE_OID)) haskeyusage = 1;
+      // Skip subject alternative name extension
+      if (!strcmp(s, SUBJ_ALT_NAME_OID)) continue;
+      // Get signature path depth from present proxy
       if (!strcmp(s, gsiProxyCertInfo_OID)) {
          unsigned char *p = xpiext->value->data;
          gsiProxyCertInfo_t *inpci =
@@ -940,11 +998,27 @@ int XrdSslgsiX509CreateProxyReq(XrdCryptoX509 *xcpi,
              inpci->proxyCertPathLengthConstraint)
             indepthlen = ASN1_INTEGER_get(inpci->proxyCertPathLengthConstraint);
          DEBUG("IN depth length: "<<indepthlen);
+      } else {
+         // Duplicate and add to the stack
+         X509_EXTENSION *xpiextdup = X509_EXTENSION_dup(xpiext);
+         if (sk_X509_EXTENSION_push(esk, xpiextdup) == 0) {
+            PRINT("could not push the extension '"<<s<<"' in the stack"); 
+            return -kErrPX_Error;
+         }
+         // Notify what we added
+         int crit = X509_EXTENSION_get_critical(xpiextdup);
+         DEBUG("added extension '"<<s<<"', critical: " << crit);
       }
       // Do not free the extension: its owned by the certificate
       xpiext = 0;
    }
-
+   //
+   // Warn if the critical oen is missing
+   if (!haskeyusage) {
+      PRINT(">>> WARNING: critical extension 'Key Usage' not found in original certificate! ");
+      PRINT(">>> WARNING: this proxy may not be accepted by some parsers. ");
+   }
+   //
    // Set the new length
    if (indepthlen > -1) {
       if ((pci->proxyCertPathLengthConstraint = ASN1_INTEGER_new())) {
@@ -993,17 +1067,11 @@ int XrdSslgsiX509CreateProxyReq(XrdCryptoX509 *xcpi,
       PRINT("could not set extension critical flag"); 
       return -kErrPX_SetAttribute;
    }
-   // Create a stack
-   STACK_OF(X509_EXTENSION) *esk = sk_X509_EXTENSION_new_null();
-   if (!esk) {
-      PRINT("could not create stack for extensions"); 
-      return -kErrPX_NoResources;
-   }
-   if (sk_X509_EXTENSION_push(esk, ext) != 1) {
+   if (sk_X509_EXTENSION_push(esk, ext) == 0) {
       PRINT("could not push the extension in the stack"); 
       return -kErrPX_Error;
    }
-   // Add extension
+   // Add extensions
    if (!(X509_REQ_add_extensions(xro, esk))) {
       PRINT("problem adding extension"); 
       return -kErrPX_SetAttribute;
@@ -1046,7 +1114,7 @@ int XrdSslgsiX509SignProxyReq(XrdCryptoX509 *xcpi, XrdCryptoRSA *kcpi,
    }
 
    // Make sure the certificate is not expired
-   int timeleft = xcpi->NotAfter() - (int)time(0);
+   int timeleft = xcpi->NotAfter() - (int)time(0) + XrdCryptoTZCorr();
    if (timeleft < 0) {
       PRINT("EEC certificate has expired"); 
       return -kErrPX_ExpiredEEC;
@@ -1161,9 +1229,10 @@ int XrdSslgsiX509SignProxyReq(XrdCryptoX509 *xcpi, XrdCryptoRSA *kcpi,
 
    //
    // Get signature path depth from input proxy
-   X509_EXTENSION *xpiext = 0;
+   X509_EXTENSION *xpiext = 0, *xriext = 0;
    int npiext = X509_get_ext_count(xpi);
    int i = 0;
+   bool haskeyusage = 0;
    int indepthlen = -1;
    for (i = 0; i< npiext; i++) {
       xpiext = X509_get_ext(xpi, i);
@@ -1180,6 +1249,31 @@ int XrdSslgsiX509SignProxyReq(XrdCryptoX509 *xcpi, XrdCryptoRSA *kcpi,
             indepthlen = ASN1_INTEGER_get(inpci->proxyCertPathLengthConstraint);
          DEBUG("IN depth length: "<<indepthlen);
       }
+      // Flag key usage extension
+      if (!haskeyusage && !strcmp(s, KEY_USAGE_OID)) haskeyusage = 1;
+      // Fail if a subject alternative name extension is found
+      if (!strcmp(s, SUBJ_ALT_NAME_OID)) {
+         PRINT("subject alternative name extension not allowed! Skipping request"); 
+         return -kErrPX_BadExtension;         
+      }
+      // Attach to ProxyCertInfo extension if any
+      if (!strcmp(s, gsiProxyCertInfo_OID)) {
+         if (xriext) {
+            PRINT("more than one ProxyCertInfo extension! Skipping request"); 
+            return -kErrPX_BadExtension;
+         }
+         xriext = xpiext;
+      } else {
+         // Duplicate and add to the stack
+         X509_EXTENSION *xpiextdup = X509_EXTENSION_dup(xpiext);
+         if (X509_add_ext(xpo, xpiextdup, -1) == 0) {
+            PRINT("could not push the extension '"<<s<<"' in the stack"); 
+            return -kErrPX_Error;
+         }
+         // Notify what we added
+         int crit = X509_EXTENSION_get_critical(xpiextdup);
+         DEBUG("added extension '"<<s<<"', critical: " << crit);
+      }
       // Do not free the extension: its owned by the certificate
       xpiext = 0;
    }
@@ -1194,27 +1288,11 @@ int XrdSslgsiX509SignProxyReq(XrdCryptoX509 *xcpi, XrdCryptoRSA *kcpi,
 #else /* OPENSSL */
    int nriext = sk_num(xrisk);
 #endif /* OPENSSL */
-   if (nriext != 1) {
-      PRINT("missing or too many extensions in request"); 
+   if (nriext == 0 || !haskeyusage) {
+      PRINT("wrong extensions in request: "<< nriext<<", "<<haskeyusage); 
       return -kErrPX_BadExtension;
    }
-   // Get it
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L
-   X509_EXTENSION *xriext = sk_X509_EXTENSION_value(xrisk, 0);
-#else /* OPENSSL */
-   X509_EXTENSION *xriext = (X509_EXTENSION *)sk_value(xrisk, 0);
-#endif /* OPENSSL */
-   if (!xriext) {
-      PRINT("could not get extensions from request"); 
-      return -kErrPX_BadExtension;
-   }
-   // Check the extension type
-   char s[256];
-   OBJ_obj2txt(s, sizeof(s), X509_EXTENSION_get_object(xriext), 1);
-   if (strcmp(s, gsiProxyCertInfo_OID)) {
-      PRINT("wrong extension found"); 
-      return -kErrPX_BadExtension;
-   }
+   //
    // Get the content
    int reqdepthlen = -1;
    unsigned char *p = xriext->value->data;
@@ -1285,7 +1363,7 @@ int XrdSslgsiX509SignProxyReq(XrdCryptoX509 *xcpi, XrdCryptoRSA *kcpi,
    }
 
    // Add the extension
-   if (X509_add_ext(xpo, ext, -1) != 1) {
+   if (X509_add_ext(xpo, ext, -1) == 0) {
       PRINT("could not add extension"); 
       return -kErrPX_SetAttribute;
    }
@@ -1324,7 +1402,7 @@ int XrdSslgsiX509DumpExtensions(XrdCryptoX509 *xcpi)
       PRINT("invalid inputs");
       return rc;
    }
-   
+
    // Point to the cerificate
    X509 *xpi = (X509 *)(xcpi->Opaque());
 
@@ -1337,8 +1415,9 @@ int XrdSslgsiX509DumpExtensions(XrdCryptoX509 *xcpi)
       xpiext = X509_get_ext(xpi, i);
       char s[256];
       OBJ_obj2txt(s, sizeof(s), X509_EXTENSION_get_object(xpiext), 1);
+      int crit = X509_EXTENSION_get_critical(xpiext);
       // Notify what we found
-      PRINT("found extension '"<<s<<"'");
+      PRINT("found extension '"<<s<<"', critical: " << crit);
       // Dump its content
       rc = 0;
       XRDGSI_CONST unsigned char *pp = (XRDGSI_CONST unsigned char *) xpiext->value->data; 

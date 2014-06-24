@@ -632,8 +632,10 @@ XRootDStatus DoLocate( FileSystem                      *fs,
       flags |= OpenFlags::NoWait;
     else if( args[i] == "-r" )
       flags |= OpenFlags::Refresh;
-    else if( args[i] == "-m" )
+    else if( args[i] == "-m" || args[i] == "-h" )
       flags |= OpenFlags::PrefName;
+    else if( args[i] == "-i" )
+      flags |= OpenFlags::Force;
     else if( args[i] == "-d" )
       doDeepLocate = true;
     else if( !hasPath )
@@ -754,13 +756,14 @@ XRootDStatus ProcessStatQuery( StatInfo *info, const std::string &query )
   // Initialize flag translation map and check the input flags
   //----------------------------------------------------------------------------
   std::map<std::string, StatInfo::Flags> flagMap;
-  flagMap["XBitSet"]     = StatInfo::XBitSet;
-  flagMap["IsDir"]       = StatInfo::IsDir;
-  flagMap["Other"]       = StatInfo::Other;
-  flagMap["Offline"]     = StatInfo::Offline;
-  flagMap["POSCPending"] = StatInfo::POSCPending;
-  flagMap["IsReadable"]  = StatInfo::IsReadable;
-  flagMap["IsWritable"]  = StatInfo::IsWritable;
+  flagMap["XBitSet"]      = StatInfo::XBitSet;
+  flagMap["IsDir"]        = StatInfo::IsDir;
+  flagMap["Other"]        = StatInfo::Other;
+  flagMap["Offline"]      = StatInfo::Offline;
+  flagMap["POSCPending"]  = StatInfo::POSCPending;
+  flagMap["IsReadable"]   = StatInfo::IsReadable;
+  flagMap["IsWritable"]   = StatInfo::IsWritable;
+  flagMap["BackUpExists"] = StatInfo::BackUpExists;
 
   std::vector<std::string>::iterator it;
   for( it = queryFlags.begin(); it != queryFlags.end(); ++it )
@@ -872,6 +875,8 @@ XRootDStatus DoStat( FileSystem                      *fs,
     flags += "IsReadable|";
   if( info->TestFlags( StatInfo::IsWritable ) )
     flags += "IsWritable|";
+  if( info->TestFlags( StatInfo::BackUpExists ) )
+    flags += "BackUpExists|";
 
   if( !flags.empty() )
     flags.erase( flags.length()-1, 1 );
@@ -1120,16 +1125,17 @@ class ProgressDisplay: public XrdCl::CopyProgressHandler
     //--------------------------------------------------------------------------
     // End job
     //--------------------------------------------------------------------------
-    virtual void EndJob( const XrdCl::PropertyList *results )
+    virtual void EndJob( uint16_t jobNum, const XrdCl::PropertyList *results )
     {
-      JobProgress( pBytesProcessed, pBytesTotal );
+      JobProgress( jobNum, pBytesProcessed, pBytesTotal );
       std::cerr << std::endl;
     }
 
     //--------------------------------------------------------------------------
     // Job progress
     //--------------------------------------------------------------------------
-    virtual void JobProgress( uint64_t bytesProcessed,
+    virtual void JobProgress( uint16_t jobNum,
+                              uint64_t bytesProcessed,
                               uint64_t bytesTotal )
     {
       pBytesProcessed = bytesProcessed;
@@ -1461,7 +1467,8 @@ XRootDStatus PrintHelp( FileSystem *, Env *,
   printf( "     -n make the server return the response immediately even\n"  );
   printf( "        though it may be incomplete\n"                           );
   printf( "     -d do a recursive (deep) locate\n"                          );
-  printf( "     -m prefer host names to IP addresses\n\n"                   );
+  printf( "     -m|-h prefer host names to IP addresses\n"                  );
+  printf( "     -i ignore network dependencies\n\n"                         );
 
   printf( "   mkdir [-p] [-m<user><group><other>] <dirname>\n"              );
   printf( "     Creates a directory/tree of directories.\n\n"               );
