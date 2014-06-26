@@ -370,7 +370,7 @@ int XrdPosixXrootd::Mkdir(const char *path, mode_t mode)
 // Issue the mkdir
 //
    return XrdPosixMap::Result(admin.Xrd.MkDir(admin.Url.GetPathWithParams(),
-                                              XrdCl::MkDirFlags::None,
+                                              XrdCl::MkDirFlags::MakePath,
                                               XrdPosixMap::Mode2Access(mode))
                                              );
 }
