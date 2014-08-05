@@ -1492,7 +1492,21 @@ XRootDStatus PrintHelp( FileSystem *, Env *,
   printf( "   query <code> <parms>\n"                                       );
   printf( "     Obtain server information. Query codes:\n\n"                );
 
-  printf( "     config         <what>   Server configuration\n"             );
+  printf( "     config         <what>   Server configuration; <what> is\n"  );
+  printf( "                             one of the following:\n"            );
+  printf( "                               bind_max      - the maximum number of parallel streams\n"  );
+  printf( "                               chksum        - the supported checksum\n"                  );
+  printf( "                               pio_max       - maximum number of parallel I/O requests\n" );
+  printf( "                               readv_ior_max - maximum size of a readv element\n"         );
+  printf( "                               readv_iov_max - maximum number of readv entries\n"         );
+  printf( "                               tpc           - support for third party copies\n"          );
+  printf( "                               wan_port      - the port to use for wan copies\n"          );
+  printf( "                               wan_window    - the wan_port window size\n"                );
+  printf( "                               window        - the tcp window size\n"                     );
+  printf( "                               cms           - the status of the cmsd\n"                  );
+  printf( "                               role          - the role in a cluster\n"                   );
+  printf( "                               sitename      - the site name\n"                           );
+  printf( "                               version       - the version of the server\n"               );
   printf( "     checksumcancel <path>   File checksum cancellation\n"       );
   printf( "     checksum       <path>   File checksum\n"                    );
   printf( "     opaque         <arg>    Implementation dependent\n"         );
@@ -1656,7 +1670,7 @@ int ExecuteInteractive( const URL &url )
   {
     char *linebuf = 0;
     linebuf = readline( BuildPrompt( ex->GetEnv(), url ).c_str() );
-    if( !linebuf || !strcmp( linebuf, "exit" ) || !strcmp( linebuf, "quit" ) )
+    if( !linebuf || !strncmp( linebuf, "exit", 4 ) || !strncmp( linebuf, "quit", 4 ) )
     {
       std::cout << "Goodbye." << std::endl << std::endl;
       break;

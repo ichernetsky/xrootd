@@ -51,6 +51,7 @@ set( XROOTD_PUBLIC_HEADERS
   XrdOuc/XrdOucDLlist.hh
   XrdOuc/XrdOucEnv.hh
   XrdOuc/XrdOucErrInfo.hh
+  XrdOuc/XrdOucGMap.hh
   XrdOuc/XrdOucHash.hh
   XrdOuc/XrdOucHash.icc
   XrdOuc/XrdOucIOVec.hh
@@ -78,6 +79,7 @@ set( XROOTD_PUBLIC_HEADERS
   XrdSfs/XrdSfsAio.hh
   XrdSfs/XrdSfsDio.hh
   XrdSfs/XrdSfsXio.hh
+  XrdSfs/XrdSfsFlags.hh
   XrdSfs/XrdSfsInterface.hh
   XrdSys/XrdSysAtomics.hh
   XrdSys/XrdSysDNS.hh

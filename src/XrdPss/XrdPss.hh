@@ -51,10 +51,11 @@ int     Opendir(const char *, XrdOucEnv &);
 int     Readdir(char *buff, int blen);
 
         // Constructor and destructor
-        XrdPssDir(const char *tid) : tident(tid), dirVec(0) {}
+        XrdPssDir(const char *tid) : tident(tid), myDir(0), dirVec(0) {}
        ~XrdPssDir() {if (dirVec) Close();}
 private:
 const    char      *tident;
+         DIR       *myDir;
          char     **dirVec;
          int        curEnt;
          int        numEnt;
@@ -137,6 +138,11 @@ int       Stat(const char *, struct stat *, int opts=0, XrdOucEnv *eP=0);
 int       Truncate(const char *, unsigned long long, XrdOucEnv *eP=0);
 int       Unlink(const char *, int Opts=0, XrdOucEnv *eP=0);
 
+static
+const  char *P2CGI(int &cgilen, char *cbuff, int cblen,
+                   const char *Cgi1, const char *Cgi2);
+static char *P2OUT(int &retc,  char *pbuff, int pblen,
+                   const char *path, const char *Cgi, const char *Ident);
 static char *P2URL(int &retc, char *pbuff, int pblen,
                    const char *path,       int Split=0,
                    const char *Cgi=0,      int CgiLn=0,
@@ -159,6 +165,9 @@ static const char  *hdrData;
 static const char  *urlRdr;
 static int          Workers;
 static int          Trace;
+
+static bool         outProxy; // True means outgoing proxy
+static bool         pfxProxy; // True means outgoing proxy is prefixed
 
 static char         allChmod;
 static char         allMkdir;

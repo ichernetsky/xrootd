@@ -648,16 +648,18 @@ XrdCmsRouting *XrdCmsProtocol::Admit()
 // Set the reference counts for intersecting nodes to be the same.
 // Additionally, indicate cache refresh will be needed because we have a new
 // node that may have files the we already reported on. Note that setting
-// isDisabled may be subject to a concurrency race, but that is still OK here.
+// isBad may be subject to a concurrency race, but that is still OK here.
 //
    Cluster.ResetRef(servset);
    if (Config.asManager()) {Manager.Reset(); myNode->SyncSpace();}
-   if (myNode->isDisable < 2) myNode->isDisable = 0;
+   myNode->isBad &= ~XrdCmsNode::isDisabled;
 
 // Document the login
 //
    Say.Emsg("Protocol",(myNode->isMan > 1 ? "Standby":"Primary"),myNode->Ident,
-            (myNode->isSuspend ? "logged in suspended." : "logged in."));
+            (myNode->isBad & XrdCmsNode::isSuspend ? "logged in suspended."
+                                                   : "logged in."));
+   myNode->ShowIF();
 
 // All done
 //
@@ -994,7 +996,7 @@ void XrdCmsProtocol::Reply_Error(XrdCmsRRData &Data, int ecode, const char *etex
 
      if (Data.Request.streamid && (Data.Routing & XrdCmsRouting::Repliable))
         {CmsResponse Resp = {{Data.Request.streamid, kYR_error, 0,
-                              htons(sizeof(kXR_unt32)+n)},
+                              htons((unsigned short int)(sizeof(kXR_unt32)+n))},
                              htonl(static_cast<unsigned int>(ecode))};
          struct iovec ioV[2] = {{(char *)&Resp, sizeof(Resp)},
                                 {(char *)etext, (size_t)n}};

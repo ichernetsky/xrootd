@@ -47,6 +47,7 @@
 #include "XrdCks/XrdCksData.hh"
 
 #include "XrdNet/XrdNetAddr.hh"
+#include "XrdNet/XrdNetIF.hh"
 #include "XrdNet/XrdNetUtils.hh"
 
 #include "XrdOfs/XrdOfs.hh"
@@ -78,6 +79,7 @@
 #include "XrdOuc/XrdOucTrace.hh"
 #include "XrdSec/XrdSecEntity.hh"
 #include "XrdSfs/XrdSfsAio.hh"
+#include "XrdSfs/XrdSfsFlags.hh"
 #include "XrdSfs/XrdSfsInterface.hh"
 
 #ifdef AIX
@@ -626,7 +628,7 @@ int XrdOfsFile::open(const char          *path,      // In
 // Verify that we can actually use this file
 //
    if (oP.poscNum > 0)
-      {if ((retc = oP.fP->Fchmod(static_cast<mode_t>(theMode | S_ISUID))))
+      {if ((retc = oP.fP->Fchmod(static_cast<mode_t>(theMode|XRDSFS_POSCPEND))))
           return XrdOfsFS->Emsg(epname, error, retc, "fchmod", path);
        XrdOfsFS->poscQ->Commit(path, oP.poscNum);
       }
@@ -1557,9 +1559,9 @@ int XrdOfs::fsctl(const int               cmd,
    if (opcode == SFS_FSCTL_LOCATE)
       {struct stat fstat;
        char pbuff[1024], rType[3];
-       const char *Resp[2] = {rType, 0};
+       const char *Resp[2] = {rType, pbuff};
        const char *locArg, *opq, *Path = Split(args,&opq,pbuff,sizeof(pbuff));
-       XrdNetIF::ifType ifType[2];
+       XrdNetIF::ifType ifType;
        int Resp1Len;
        int find_flag = SFS_O_LOCATE
                      | (cmd&(SFS_O_FORCE|SFS_O_NOWAIT|SFS_O_RESET|SFS_O_HNAME));
@@ -1579,17 +1581,13 @@ int XrdOfs::fsctl(const int               cmd,
        rType[1] =  (fstat.st_mode & S_IWUSR             ? 'w' : 'r');
        rType[2] = '\0';
 
+       ifType = XrdNetIF::GetIFType((einfo.getUCap() & XrdOucEI::uIPv4)  != 0,
+                                    (einfo.getUCap() & XrdOucEI::uIPv64) != 0,
+                                    (einfo.getUCap() & XrdOucEI::uPrip)  != 0);
        bool retHN = (cmd & SFS_O_HNAME) != 0;
-       if (einfo.getUCap() & XrdOucEI::uPrip)
-          {ifType[0] = XrdNetIF::Private; ifType[1] = XrdNetIF::Public;
-          } else {
-           ifType[0] = XrdNetIF::Public;  ifType[1] = XrdNetIF::Private;
-          }
-       for (i = 0; i < 2; i++)
-           {if ((Resp1Len = myIF.GetDest(ifType[i], Resp[1], retHN)))
-               {einfo.setErrInfo(Resp1Len+3, (const char **)Resp, 2);
-                return SFS_DATA;
-               }
+       if ((Resp1Len = myIF->GetDest(pbuff, sizeof(pbuff), ifType, retHN)))
+           {einfo.setErrInfo(Resp1Len+3, (const char **)Resp, 2);
+            return SFS_DATA;
            }
        return Emsg(epname, einfo, ENETUNREACH, "locate", Path);
       }

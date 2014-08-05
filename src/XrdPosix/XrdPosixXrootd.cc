@@ -245,6 +245,7 @@ int     XrdPosixXrootd::Fstat(int fildes, struct stat *buf)
    buf->st_atime  = buf->st_mtime = buf->st_ctime = fp->myMtime;
    buf->st_blocks = buf->st_size/512+1;
    buf->st_ino    = fp->myInode;
+   buf->st_rdev   = fp->myRdev;
    buf->st_mode   = fp->myMode;
 
 // All done
@@ -362,6 +363,12 @@ off_t   XrdPosixXrootd::Lseek(int fildes, off_t offset, int whence)
 int XrdPosixXrootd::Mkdir(const char *path, mode_t mode)
 {
   XrdPosixAdmin admin(path);
+  XrdCl::MkDirFlags::Flags flags;
+
+// Preferentially make the whole path unless told otherwise
+//
+   flags = (mode & S_ISUID ? XrdCl::MkDirFlags::None
+                           : XrdCl::MkDirFlags::MakePath);
 
 // Make sure the admin is OK
 //
@@ -370,7 +377,7 @@ int XrdPosixXrootd::Mkdir(const char *path, mode_t mode)
 // Issue the mkdir
 //
    return XrdPosixMap::Result(admin.Xrd.MkDir(admin.Url.GetPathWithParams(),
-                                              XrdCl::MkDirFlags::MakePath,
+                                              flags,
                                               XrdPosixMap::Mode2Access(mode))
                                              );
 }
@@ -683,10 +690,11 @@ struct dirent64* XrdPosixXrootd::Readdir64(DIR *dirp)
 int XrdPosixXrootd::Readdir_r(DIR *dirp,   struct dirent    *entry,
                                            struct dirent   **result)
 {
-   dirent64 *dp64;
+   dirent64 *dp64 = 0, d64ent;
    int       rc;
 
-   if ((rc = Readdir64_r(dirp, 0, &dp64)) <= 0) {*result = 0; return rc;}
+   if ((rc = Readdir64_r(dirp, &d64ent, &dp64)) || !dp64)
+      {*result = 0; return rc;}
 
    entry->d_ino    = dp64->d_ino;
 #if !defined(__APPLE__) && !defined(__FreeBSD__)
@@ -709,13 +717,12 @@ int XrdPosixXrootd::Readdir64_r(DIR *dirp, struct dirent64  *entry,
 
 // Find the object
 //
-   if (!(dP = XrdPosixObject::Dir(fildes)))
-      {errno = EBADF; return 0;}
+   if (!(dP = XrdPosixObject::Dir(fildes))) return EBADF;
 
 // Get the next entry
 //
-   if (!(*result = dP->nextEntry(entry))) rc = dP->Status();
-      else rc = 0;
+   if (!(*result = dP->nextEntry(entry))) {rc = dP->Status(); *result = 0;}
+      else {rc = 0; *result = entry;}
 
 // Return the appropriate result
 //
@@ -807,13 +814,14 @@ int XrdPosixXrootd::Stat(const char *path, struct stat *buf)
 {
    XrdPosixAdmin admin(path);
    size_t stSize;
+   dev_t  stRdev;
    ino_t  stId;
    time_t stMtime;
    mode_t stFlags;
 
 // Issue the stat and verify that all went well
 //
-   if (!admin.Stat(&stFlags, &stMtime, &stSize, &stId)) return -1;
+   if (!admin.Stat(&stFlags, &stMtime, &stSize, &stId, &stRdev)) return -1;
 
 // Return what little we can
 //
@@ -822,6 +830,7 @@ int XrdPosixXrootd::Stat(const char *path, struct stat *buf)
    buf->st_blocks = stSize/512+1;
    buf->st_atime  = buf->st_mtime = buf->st_ctime = stMtime;
    buf->st_ino    = stId;
+   buf->st_rdev   = stRdev;
    buf->st_mode   = stFlags;
    return 0;
 }

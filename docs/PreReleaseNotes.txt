@@ -6,16 +6,29 @@ Prerelease Notes
 ================
 
 + **New Features**
+   * Allow xrootd to handle objectid names as exports (new feature).
+   * Implement a forwarding proxy option.
    * Pass along XRD_MONINFO setting and application name to monitoring.
    * Set client location information.
 
 + **Major bug fixes**
 
 + **Minor bug fixes**
+   * Squelch C11 warnings when dev_t is 32 bits (MacOS).
+   * Correct header define gaurd in XrdSfsFlags.hh.
+   * Fix broken readdir_r() and readdir_r64() functions.
+   * Fully support extended file system features and pass those features
+     through a proxy server. This fixes bug report #115.
+   * Add missing initializer to the LocInfo structure.
    * Provide full error mapping for POSIX interface.
    * Prevent over-scan of the xrd.network routes option which may cause
      a config file error message and initialization failure.
 
 + **Miscellaneous**
+   * Properly support proxying objectids.
+   * Make sure to always passhrough CGI information.
+   * Honor network routing when creating the client's i/f selection mask.
+   * Prevent mkdir failure in a clustered environment by creating the
+     full directory path by default (can be turned off).
    * Efficiently handle replicated subscribers (i.e. managers).
 
