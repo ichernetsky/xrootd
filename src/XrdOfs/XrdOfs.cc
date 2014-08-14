@@ -1007,7 +1007,7 @@ XrdSfsXferSize XrdOfsFile::write(XrdSfsFileOffset  offset,    // In
 
 // Perform any required tracing
 //
-   FTRACE(write, blen <<"@" <<offset);
+   FTRACE(write, oh->Name() << " " << blen <<"@" <<offset);
 
 // Make sure the offset is not too large
 //
