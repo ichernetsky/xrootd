@@ -182,7 +182,7 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
   const char *tgtNode = (XrdFixedFS.getWriteRedirector()->node(nPath));
 
   if (strncmp(srcNode, tgtNode, XRD_FIXED_MAX_HOSTNAME_LEN + 1) == 0)
-      return nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
+      return redirect(oPath, eInfo);
 
   char srcUrl[XRD_FIXED_MAX_URL_LEN] = {0};
   char tgtUrl[XRD_FIXED_MAX_URL_LEN] = {0};
