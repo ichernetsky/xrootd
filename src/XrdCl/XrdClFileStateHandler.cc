@@ -305,6 +305,13 @@ namespace XrdCl
     // Check if the parameters are valid
     //--------------------------------------------------------------------------
     Log *log = DefaultEnv::GetLog();
+
+    if (pFileUrl)
+    {
+      delete pFileUrl;
+      pFileUrl = 0;
+    }
+
     pFileUrl = new URL( url );
     if( !pFileUrl->IsValid() )
     {
@@ -921,7 +928,7 @@ namespace XrdCl
     // We have failed
     //--------------------------------------------------------------------------
     pStatus = *status;
-    if( !pStatus.IsOK() )
+    if( !pStatus.IsOK() || !openInfo )
     {
       log->Debug( FileMsg, "[0x%x@%s] Error while opening at %s: %s",
                   this, pFileUrl->GetURL().c_str(), lastServer.c_str(),

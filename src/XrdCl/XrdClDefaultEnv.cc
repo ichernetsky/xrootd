@@ -27,7 +27,7 @@
 #include "XrdCl/XrdClCheckSumManager.hh"
 #include "XrdCl/XrdClTransportManager.hh"
 #include "XrdCl/XrdClPlugInManager.hh"
-#include "XrdSys/XrdSysPlugin.hh"
+#include "XrdOuc/XrdOucPreload.hh"
 #include "XrdSys/XrdSysUtils.hh"
 #include "XrdSys/XrdSysPwd.hh"
 #include "XrdVersion.hh"
@@ -160,7 +160,7 @@ namespace XrdCl
   ForkHandler       *DefaultEnv::sForkHandler        = 0;
   FileTimer         *DefaultEnv::sFileTimer          = 0;
   Monitor           *DefaultEnv::sMonitor            = 0;
-  XrdSysPlugin      *DefaultEnv::sMonitorLibHandle   = 0;
+  XrdOucPinLoader   *DefaultEnv::sMonitorLibHandle   = 0;
   bool               DefaultEnv::sMonitorInitialized = false;
   CheckSumManager   *DefaultEnv::sCheckSumManager    = 0;
   TransportManager  *DefaultEnv::sTransportManager   = 0;
@@ -194,6 +194,11 @@ namespace XrdCl
     REGISTER_VAR_INT( varsInt, "LoadBalancerTTL",      DefaultLoadBalancerTTL      );
     REGISTER_VAR_INT( varsInt, "CPInitTimeout",        DefaultCPInitTimeout        );
     REGISTER_VAR_INT( varsInt, "CPTPCTimeout",         DefaultCPTPCTimeout         );
+    REGISTER_VAR_INT( varsInt, "TCPKeepAlive",         DefaultTCPKeepAlive         );
+    REGISTER_VAR_INT( varsInt, "TCPKeepAliveTime",     DefaultTCPKeepAliveTime     );
+    REGISTER_VAR_INT( varsInt, "TCPKeepAliveInterval", DefaultTCPKeepAliveInterval );
+    REGISTER_VAR_INT( varsInt, "TCPKeepProbes",        DefaultTCPKeepAliveProbes   );
+    REGISTER_VAR_INT( varsInt, "MultiProtocol",        DefaultMultiProtocol        );
 
     REGISTER_VAR_STR( varsStr, "PollerPreference",     DefaultPollerPreference     );
     REGISTER_VAR_STR( varsStr, "ClientMonitor",        DefaultClientMonitor        );
@@ -442,19 +447,19 @@ namespace XrdCl
         // Loading the plugin
         //----------------------------------------------------------------------
         char *errBuffer = new char[4000];
-        sMonitorLibHandle = new XrdSysPlugin(
-                                 errBuffer, 4000, monitorLib.c_str(),
-                                 monitorLib.c_str(),
-                                 &XrdVERSIONINFOVAR( XrdCl ) );
+        sMonitorLibHandle = new XrdOucPinLoader(
+                                 errBuffer, 4000, &XrdVERSIONINFOVAR( XrdCl ),
+                                 "monitor", monitorLib.c_str() );
 
         typedef XrdCl::Monitor *(*MonLoader)(const char *, const char *);
         MonLoader loader;
-        loader = (MonLoader)sMonitorLibHandle->getPlugin( "XrdClGetMonitor" );
+        loader = (MonLoader)sMonitorLibHandle->Resolve( "XrdClGetMonitor", -1 );
         if( !loader )
         {
           log->Error( UtilityMsg, "Unable to initialize user monitoring: %s",
                       errBuffer );
           delete [] errBuffer;
+          sMonitorLibHandle->Unload();
           delete sMonitorLibHandle; sMonitorLibHandle = 0;
           return 0;
         }
@@ -470,6 +475,7 @@ namespace XrdCl
           log->Error( UtilityMsg, "Unable to initialize user monitoring: %s",
                       errBuffer );
           delete [] errBuffer;
+          sMonitorLibHandle->Unload();
           delete sMonitorLibHandle; sMonitorLibHandle = 0;
           return 0;
         }
@@ -552,21 +558,21 @@ namespace XrdCl
 
     const char *libs[] =
     {
-      "libXrdSeckrb5.dylib",
-      "libXrdSecgsi.dylib",
-      "libXrdSecgsiAuthzVO.dylib",
-      "libXrdSecgsiGMAPDN.dylib",
-      "libXrdSecgsiGMAPLDAP.dylib",
-      "libXrdSecpwd.dylib",
-      "libXrdSecsss.dylib",
-      "libXrdSecunix.dylib",
+      "libXrdSeckrb5.so",
+      "libXrdSecgsi.so",
+      "libXrdSecgsiAuthzVO.so",
+      "libXrdSecgsiGMAPDN.so",
+      "libXrdSecgsiGMAPLDAP.so",
+      "libXrdSecpwd.so",
+      "libXrdSecsss.so",
+      "libXrdSecunix.so",
       0
     };
 
     for( int i = 0; libs[i]; ++i )
     {
       sLog->Debug( UtilityMsg, "Attempting to pre-load: %s", libs[i] );
-      bool ok = XrdSysPlugin::Preload( libs[i], errBuff, 1024 );
+      bool ok = XrdOucPreload( libs[i], errBuff, 1024 );
       if( !ok )
         sLog->Error( UtilityMsg, "Unable to pre-load %s: %s", libs[i], errBuff );
     }
@@ -596,6 +602,8 @@ namespace XrdCl
     delete sMonitor;
     sMonitor = 0;
 
+    if( sMonitorLibHandle )
+      sMonitorLibHandle->Unload();
     delete sMonitorLibHandle;
     sMonitorLibHandle = 0;
 

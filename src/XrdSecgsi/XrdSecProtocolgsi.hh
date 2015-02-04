@@ -50,14 +50,14 @@
 #include "XrdCrypto/XrdCryptoFactory.hh"
 #include "XrdCrypto/XrdCryptoX509Crl.hh"
 
-#include "XrdCrypto/XrdCryptosslgsiX509Chain.hh"
+#include "XrdCrypto/XrdCryptogsiX509Chain.hh"
 
 /******************************************************************************/
 /*                               D e f i n e s                                */
 /******************************************************************************/
 
 typedef XrdOucString String;
-typedef XrdCryptosslgsiX509Chain X509Chain;
+typedef XrdCryptogsiX509Chain X509Chain;
   
 #define XrdSecPROTOIDENT    "gsi"
 #define XrdSecPROTOIDLEN    sizeof(XrdSecPROTOIDENT)
@@ -232,27 +232,26 @@ typedef struct {
    int         bits;
 } ProxyIn_t;
 
-
-class GSICrlStack {
+template<class T>
+class GSIStack {
 public:
-   void Add(XrdCryptoX509Crl *crl) {
-      char k[40]; snprintf(k, 40, "%p", crl); 
+   void Add(T *t) {
+      char k[40]; snprintf(k, 40, "%p", t); 
       mtx.Lock();
-      if (!stack.Find(k)) stack.Add(k, crl, 0, Hash_count);
-      stack.Add(k, crl, 0, Hash_count);
+      if (!stack.Find(k)) stack.Add(k, t, 0, Hash_count);
+      stack.Add(k, t, 0, Hash_count);
       mtx.UnLock();
    }
-   void Del(XrdCryptoX509Crl *crl) {
-      char k[40]; snprintf(k, 40, "%p", crl); 
+   void Del(T *t) {
+      char k[40]; snprintf(k, 40, "%p", t); 
       mtx.Lock();
       if (stack.Find(k)) stack.Del(k, Hash_count);
       mtx.UnLock();
    }
 private:
    XrdSysMutex                  mtx;
-   XrdOucHash<XrdCryptoX509Crl> stack;
+   XrdOucHash<T> stack;
 };
-
 
 /******************************************************************************/
 /*              X r d S e c P r o t o c o l g s i   C l a s s                 */
@@ -326,9 +325,7 @@ private:
    static int              GMAPOpt;
    static bool             GMAPuseDNname;
    static int              GMAPCacheTimeOut;
-   static XrdSysPlugin    *GMAPPlugin;
    static XrdSecgsiGMAP_t  GMAPFun;
-   static XrdSysPlugin    *AuthzPlugin;
    static XrdSecgsiAuthz_t AuthzFun; 
    static XrdSecgsiAuthzKey_t AuthzKey; 
    static int              AuthzCertFmt; 
@@ -338,7 +335,6 @@ private:
    static int              AuthzPxyWhere;
    static String           SrvAllowedNames;
    static int              VOMSAttrOpt; 
-   static XrdSysPlugin    *VOMSPlugin;
    static XrdSecgsiVOMS_t  VOMSFun;
    static int              VOMSCertFmt; 
    static int              MonInfoOpt;
@@ -362,8 +358,9 @@ private:
    // Services
    static XrdOucGMap      *servGMap;  // Grid mapping service 
    //
-   // CRL stack
-   static GSICrlStack      stackCRL; // Stack of CRL in use
+   // CA and CRL stacks
+   static GSIStack<XrdCryptoX509Chain>    stackCA; // Stack of CA in use
+   static GSIStack<XrdCryptoX509Crl>      stackCRL; // Stack of CRL in use
    //
    // GMAP control vars
    static time_t           lastGMAPCheck; // time of last check on GMAP
@@ -435,7 +432,7 @@ private:
    static int     QueryProxy(bool checkcache, XrdSutCache *cache, const char *tag,
                              XrdCryptoFactory *cf, time_t timestamp,
                              ProxyIn_t *pi, ProxyOut_t *po);
-   static int     InitProxy(ProxyIn_t *pi,
+   static int     InitProxy(ProxyIn_t *pi, XrdCryptoFactory *cf,
                             X509Chain *ch = 0, XrdCryptoRSA **key = 0);
 
    // Error functions

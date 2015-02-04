@@ -24,9 +24,9 @@
 
 #include "XrdSys/XrdSysPthread.hh"
 #include "XrdOuc/XrdOucCache.hh"
+
 #include "XrdCl/XrdClDefaultEnv.hh"
 #include "XrdVersion.hh"
-
 #include "XrdFileCacheDecision.hh"
 
 class XrdOucStream;
@@ -45,7 +45,7 @@ namespace XrdFileCache
    struct Configuration
    {
       Configuration() :
-         m_prefetchFileBlocks(false),
+         m_hdfsmode(false),
          m_cache_dir("/var/tmp/xrootd-file-cache"),
          m_username("nobody"),
          m_lwm(0.95),
@@ -53,12 +53,11 @@ namespace XrdFileCache
          m_bufferSize(1024*1024),
 	 m_NRamBuffersRead(8),
 	 m_NRamBuffersPrefetch(1),
-         m_blockSize(128*1024*1024) {}
+         m_hdfsbsize(128*1024*1024) {}
 
-      bool m_prefetchFileBlocks;      //!< flag for enabling block-level operation
+      bool m_hdfsmode;      //!< flag for enabling block-level operation
       std::string m_cache_dir;        //!< path of disk cache
       std::string m_username;         //!< username passed to oss plugin
-      std::string m_osslib_name;      //!< oss library name (optional)
 
       float m_lwm;                    //!< cache purge low water mark
       float m_hwm;                    //!< cache purge high water mark
@@ -66,7 +65,7 @@ namespace XrdFileCache
       long long m_bufferSize;         //!< prefetch buffer size, default 1MB
       int  m_NRamBuffersRead;         //!< number of read in-memory cache blocks
       int  m_NRamBuffersPrefetch;     //!< number of prefetch in-memory cache blocks
-      long long m_blockSize;          //!< used with m_prefetchFileBlocks, default 128MB
+      long long m_hdfsbsize;          //!< used with m_hdfsmode, default 128MB
    };
 
 
@@ -150,9 +149,8 @@ namespace XrdFileCache
          bool CheckFileForDiskSpace(const char* path, long long fsize);
          void UnCheckFileForDiskSpace(const char* path);
 
-         bool ConfigParameters(const char *);
+         bool ConfigParameters(std::string, XrdOucStream&);
          bool ConfigXeq(char *, XrdOucStream &);
-         bool xolib(XrdOucStream &);
          bool xdlib(XrdOucStream &);
 
          XrdCl::Log* clLog() const { return XrdCl::DefaultEnv::GetLog(); }

@@ -177,8 +177,8 @@ char           viaDel;
 
 class XrdAccAuthorize;
 class XrdCks;
-class XrdCksConfig;
 class XrdCmsClient;
+class XrdOfsConfigPI;
 class XrdOfsPoscq;
   
 class XrdOfs : public XrdSfsFileSystem
@@ -292,6 +292,7 @@ virtual               ~XrdOfs() {}  // Too complicate to delete :-)
 // Configuration values for this filesystem
 //
 enum {Authorize = 0x0001,    // Authorization wanted
+      XAttrPlug = 0x0002,    // Extended Attribute Plugin
       isPeer    = 0x0050,    // Role peer
       isProxy   = 0x0020,    // Role proxy
       isManager = 0x0040,    // Role manager
@@ -300,7 +301,8 @@ enum {Authorize = 0x0001,    // Authorization wanted
       isMeta    = 0x0100,    // Role meta + above
       haveRole  = 0x01F0,    // A role is present
       Forwarding= 0x1000,    // Fowarding wanted
-      ThirdPC   = 0x2000     // This party copy wanted
+      ThirdPC   = 0x2000,    // This party copy wanted
+      SubCluster= 0x4000     // all.subcluster directive encountered
      };                      // These are set in Options below
 
 int   Options;               // Various options
@@ -335,10 +337,6 @@ static int MaxDelay;  //    Max delay imposed during staging
 static int OSSDelay;  //    Delay to impose when oss interface times out
 
 char *ConfigFN;       //    ->Configuration filename
-char *OssLib;         //    ->Oss Library
-char *OssParms;       //    ->Oss Library Parameters
-char *CmsLib;         //    ->Cms Library
-char *CmsParms;       //    ->Cms Library Parameters
 
 /******************************************************************************/
 /*                       P r o t e c t e d   I t e m s                        */
@@ -366,8 +364,6 @@ const char   *Split(const char *Args, const char **Opq, char *Path, int Plen);
 
 private:
   
-char             *AuthLib;        //    ->Authorization   Library
-char             *AuthParm;       //    ->Authorization   Parameters
 char             *myRole;
 XrdAccAuthorize  *Authorization;  //    ->Authorization   Service
 XrdCmsClient     *Balancer;       //    ->Cluster Local   Interface
@@ -376,11 +372,13 @@ XrdOfsEvs        *evsObject;      //    ->Event Notifier
 XrdOfsPoscq      *poscQ;          //    -> poscQ if  persist on close enabled
 char             *poscLog;        //    -> Directory for posc recovery log
 int               poscHold;       //       Seconds to hold a forced close
-int               poscAuto;       //  1 -> Automatic persist on close
+short             poscAuto;       //  1 -> Automatic persist on close
 
-XrdCksConfig     *CksConfig;      // Checksum configurator
+char              Rsvd1;          //  Reserved
+bool              CksPfn;         // Checksum needs a pfn
+XrdOfsConfigPI   *ofsConfig;      // Plugin   configurator
 XrdCks           *Cks;            // Checksum manager
-int               CksRdsz;        // Checksum read size
+int               Reserved4;      // Reserved for future checksum stuff
 
 char              myRType[4];     // Role type for consistency with the cms
 
@@ -408,17 +406,12 @@ const char   *Fname(const char *);
 int           Forward(int &Result, XrdOucErrInfo &Resp, struct fwdOpt &Fwd,
                       const char *arg1=0, const char *arg2=0,
                       XrdOucEnv  *Env1=0, XrdOucEnv  *Env2=0);
-int           setupAuth(XrdSysError &);
 const char   *theRole(int opts);
-int           xalib(XrdOucStream &, XrdSysError &);
-int           xclib(XrdOucStream &, XrdSysError &);
 int           xcrds(XrdOucStream &, XrdSysError &);
-int           xcmsl(XrdOucStream &, XrdSysError &);
 int           xforward(XrdOucStream &, XrdSysError &);
 int           xmaxd(XrdOucStream &, XrdSysError &);
 int           xnmsg(XrdOucStream &, XrdSysError &);
 int           xnot(XrdOucStream &, XrdSysError &);
-int           xolib(XrdOucStream &, XrdSysError &);
 int           xpers(XrdOucStream &, XrdSysError &);
 int           xrole(XrdOucStream &, XrdSysError &);
 int           xtpc(XrdOucStream &, XrdSysError &);

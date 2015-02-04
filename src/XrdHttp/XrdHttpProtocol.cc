@@ -28,9 +28,9 @@
 #include "XProtocol/XProtocol.hh"
 #include "XrdOuc/XrdOucStream.hh"
 #include "XrdOuc/XrdOucEnv.hh"
+#include "XrdOuc/XrdOucGMap.hh"
 #include "XrdSys/XrdSysTimer.hh"
-#include "XrdSys/XrdSysPlugin.hh"
-
+#include "XrdOuc/XrdOucPinLoader.hh"
 
 #include "XrdHttpTrace.hh"
 #include "XrdHttpProtocol.hh"
@@ -65,7 +65,6 @@ int XrdHttpProtocol::Port = 1094;
 char *XrdHttpProtocol::Port_str = 0;
 char *XrdHttpProtocol::Addr_str = 0;
 int XrdHttpProtocol::Window = 0;
-char *XrdHttpProtocol::SecLib = 0;
 
 //XrdXrootdStats *XrdHttpProtocol::SI = 0;
 char *XrdHttpProtocol::sslcert = 0;
@@ -82,6 +81,10 @@ bool XrdHttpProtocol::selfhttps2http = false;
 bool XrdHttpProtocol::isdesthttps = false;
 char *XrdHttpProtocol::sslcafile = 0;
 char *XrdHttpProtocol::secretkey = 0;
+
+char *XrdHttpProtocol::gridmap = 0;
+XrdOucGMap *XrdHttpProtocol::servGMap = 0;  // Grid mapping service
+   
 int XrdHttpProtocol::sslverifydepth = 9;
 SSL_CTX *XrdHttpProtocol::sslctx = 0;
 BIO *XrdHttpProtocol::sslbio_err = 0;
@@ -114,7 +117,7 @@ XrdHttpProtocol::ProtStack("ProtStack",
 // the protocol driver to obtain a copy of the protocol object that can be used
 // to decide whether or not a link is talking a particular protocol.
 //
-XrdVERSIONINFO(XrdgetProtocol, xrootd);
+XrdVERSIONINFO(XrdgetProtocol, xrdhttp);
 
 extern "C" {
 
@@ -147,7 +150,7 @@ extern "C" {
 // This function is called early on to determine the port we need to use. The
 // default is ostensibly 1094 but can be overidden; which we allow.
 //
-XrdVERSIONINFO(XrdgetProtocolPort, xrootd);
+XrdVERSIONINFO(XrdgetProtocolPort, xrdhttp);
 
 extern "C" {
 
@@ -285,40 +288,56 @@ XrdProtocol *XrdHttpProtocol::Match(XrdLink *lp) {
 
 
 int XrdHttpProtocol::GetVOMSData(XrdLink *lp) {
-
-
+  TRACEI(DEBUG, " Extracting auth info.");
+  
   SecEntity.host = GetClientIPStr();
 
+  X509 *peer_cert;
+  
+  // No external plugin, hence we fill our XrdSec with what we can do here
+  peer_cert = SSL_get_peer_certificate(ssl);
+  TRACEI(DEBUG, " SSL_get_peer_certificate returned :" << peer_cert);
+  if (peer_cert && peer_cert->name) {
+    
+    // Add the original DN to the moninfo. Not sure if it makes sense to parametrize this or not.
+    SecEntity.moninfo = strdup(peer_cert->name);
+    
+    // Here we have the user DN, we try to translate it using the XrdSec functions and the gridmap
+    if (SecEntity.name) free(SecEntity.name);
+    if (servGMap) {  
+      SecEntity.name = (char *)malloc(128);
+      int e = servGMap->dn2user(peer_cert->name, SecEntity.name, 127, 0);
+      if ( !e ) {
+	TRACEI(DEBUG, " Mapping Username: " << peer_cert->name << " --> " << SecEntity.name);
+      }
+      else {
+	TRACEI(ALL, " Mapping Username: " << peer_cert->name << " Failed. err: " << e);
+	strncpy(SecEntity.name, peer_cert->name, 127);
+      }
+    }
+    else {
+      SecEntity.name = strdup(peer_cert->name);
+    }
+    
+    TRACEI(DEBUG, " Setting link name: " << SecEntity.name);
+    lp->setID(SecEntity.name, 0);
+  }
+  else return 1;
+  
+  if (peer_cert) X509_free(peer_cert);
 
 
+  
   // Invoke our instance of the Security exctractor plugin
   // This will fill the XrdSec thing with VOMS info, if VOMS is
   // installed. If we have no sec extractor then do nothing, just plain https
   // will work.
-  if (secxtractor) secxtractor->GetSecData(lp, SecEntity, ssl);
-  else {
-
-      X509 *peer_cert;
-
-      // No external plugin, hence we fill our XrdSec with what we can do here
-      peer_cert = SSL_get_peer_certificate(ssl);
-      TRACEI(DEBUG, " SSL_get_peer_certificate returned :" << peer_cert);
-      if (peer_cert && peer_cert->name) {
-
-          TRACEI(DEBUG, " Setting Username :" << peer_cert->name);
-          lp->setID(peer_cert->name, 0);
-
-          // Here we should fill the SecEntity instance with the DN and the voms stuff
-          SecEntity.name = strdup((char *) peer_cert->name);
-
-        }
-
-      if (peer_cert) X509_free(peer_cert);
-    }
-
+  if (secxtractor)
+    secxtractor->GetSecData(lp, SecEntity, ssl);
+  
   return 0;
 }
-
+  
 char *XrdHttpProtocol::GetClientIPStr() {
   char buf[256];
   buf[0] = '\0';
@@ -326,7 +345,7 @@ char *XrdHttpProtocol::GetClientIPStr() {
   XrdNetAddrInfo *ai = Link->AddrInfo();
   if (!ai) return strdup("unknown");
 
-  if (!Link->AddrInfo()->Format(buf, 255, XrdNetAddrInfo::fmtAddr)) return strdup("unknown");
+  if (!Link->AddrInfo()->Format(buf, 255, XrdNetAddrInfo::fmtAddr, XrdNetAddrInfo::noPort)) return strdup("unknown");
 
   return strdup(buf);
 }
@@ -408,8 +427,12 @@ int XrdHttpProtocol::Process(XrdLink *lp) // We ignore the argument here
       BIO_set_nbio(sbio, 0);
 
       // Get the voms string and auth information
-      GetVOMSData(Link);
-
+      if (GetVOMSData(Link)) {
+          SSL_free(ssl);
+          ssl = 0;
+          return -1;
+      }
+        
       ERR_print_errors(sslbio_err);
       res = SSL_get_verify_result(ssl);
       TRACEI(DEBUG, " SSL_get_verify_result returned :" << res);
@@ -593,7 +616,11 @@ int XrdHttpProtocol::Process(XrdLink *lp) // We ignore the argument here
 
   // Now we have everything that is needed to try the login
   if (!Bridge) {
-    Bridge = XrdXrootd::Bridge::Login(&CurrentReq, Link, &SecEntity, "unnamed", "XrdHttp");
+    if (SecEntity.name)
+      Bridge = XrdXrootd::Bridge::Login(&CurrentReq, Link, &SecEntity, SecEntity.name, "XrdHttp");
+    else
+      Bridge = XrdXrootd::Bridge::Login(&CurrentReq, Link, &SecEntity, "unknown", "XrdHttp");
+    
     if (!Bridge) {
       TRACEI(REQ, " Autorization failed.");
       return -1;
@@ -698,14 +725,13 @@ int XrdHttpProtocol::Config(const char *ConfigFN) {
     if ((ismine = !strncmp("http.", var, 5)) && var[5]) var += 5;
     else if ((ismine = !strcmp("all.export", var))) var += 4;
     else if ((ismine = !strcmp("all.pidpath", var))) var += 4;
-    else if ((ismine = !strcmp("all.seclib", var))) var += 4;
 
     if (ismine) {
-      if TS_Xeq("seclib", xsecl);
-      else if TS_Xeq("trace", xtrace);
+           if TS_Xeq("trace", xtrace);
       else if TS_Xeq("cert", xsslcert);
       else if TS_Xeq("key", xsslkey);
       else if TS_Xeq("cadir", xsslcadir);
+      else if TS_Xeq("gridmap", xgmap);
       else if TS_Xeq("cafile", xsslcafile);
       else if TS_Xeq("secretkey", xsecretkey);
       else if TS_Xeq("desthttps", xdesthttps);
@@ -1039,10 +1065,10 @@ int XrdHttpProtocol::SendData(char *body, int bodylen) {
 /// Header_to_add is a set of header lines each CRLF terminated to be added to the header
 /// Returns 0 if OK
 
-int XrdHttpProtocol::SendSimpleResp(int code, char *desc, char *header_to_add, char *body, int bodylen) {
+int XrdHttpProtocol::SendSimpleResp(int code, char *desc, char *header_to_add, char *body, long long bodylen) {
   char outhdr[512];
   char b[16];
-  int l;
+  long long l;
   const char *crlf = "\r\n";
   outhdr[0] = '\0';
 
@@ -1073,7 +1099,7 @@ int XrdHttpProtocol::SendSimpleResp(int code, char *desc, char *header_to_add, c
     else l = 0;
   }
 
-  sprintf(b, "%d", l);
+  sprintf(b, "%lld", l);
   strcat(outhdr, "Content-Length: ");
   strcat(outhdr, b);
   strncat(outhdr, crlf, 2);
@@ -1111,13 +1137,8 @@ int XrdHttpProtocol::Configure(char *parms, XrdProtocol_Config * pi) {
     Output:   0 upon success or !0 otherwise.
    */
 
-  extern XrdSecService * XrdXrootdloadSecurity(XrdSysError *, char *,
-          char *, void **);
-
   extern int optind, opterr;
 
-
-  void *secGetProt = 0;
   char *rdf, c;
 
   // Copy out the special info we want to use at top level
@@ -1178,22 +1199,6 @@ int XrdHttpProtocol::Configure(char *parms, XrdProtocol_Config * pi) {
   rdf = (parms && *parms ? parms : pi->ConfigFN);
   if (rdf && Config(rdf)) return 0;
   if (pi->DebugON) XrdHttpTrace->What = TRACE_ALL;
-
-
-  // Initialize the security system if this is wanted
-  //
-  if (!SecLib) eDest.Say("Config warning: 'xrootd.seclib' not specified;"
-          " strong authentication disabled!");
-  else {
-    TRACE(DEBUG, "Loading security library " << SecLib);
-    if (!(CIA = XrdXrootdloadSecurity(&eDest, SecLib, pi->ConfigFN,
-            &secGetProt))) {
-      eDest.Emsg("Config", "Unable to load security system.");
-      return 0;
-    }
-  }
-
-
 
   // Set the redirect flag if we are a pure redirector
   //
@@ -1374,17 +1379,40 @@ int XrdHttpProtocol::InitSecurity() {
       exit(1);
     }
   }
-
+  
+  
+  
+  
+  
   //eDest.Say(" Setting verify depth to ", itoa(sslverifydepth), "'.");
   SSL_CTX_set_verify_depth(sslctx, sslverifydepth);
   ERR_print_errors(sslbio_err);
   //SSL_CTX_set_verify(sslctx,
   //        SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);
   SSL_CTX_set_verify(sslctx,
-          SSL_VERIFY_PEER, verify_callback);
-
-
-
+		     SSL_VERIFY_PEER, verify_callback);
+  
+  
+  
+  
+  //
+  // Check existence of GRID map file
+  if (gridmap) {
+    
+    // Initialize the GMap service
+    //
+    XrdOucString pars;
+    if (XrdHttpTrace->What == TRACE_DEBUG) pars += "dbg|";
+    
+    if (!(servGMap = XrdOucgetGMap(&eDest, gridmap, pars.c_str()))) {
+      	eDest.Say("Error loading grid map file:", gridmap);
+	exit(1);
+    } else {
+      TRACE(ALL, "using grid map file: "<< gridmap);        
+    } 
+    
+  }
+  
   if (secxtractor) secxtractor->Init(sslctx, XrdHttpTrace->What);
 
   ERR_print_errors(sslbio_err);
@@ -1410,14 +1438,13 @@ void XrdHttpProtocol::Cleanup() {
      SSL_free(ssl);
   }
 
-
   ssl = 0;
   sbio = 0;
-
 
   if (SecEntity.vorg) free(SecEntity.vorg);
   if (SecEntity.name) free(SecEntity.name);
   if (SecEntity.host) free(SecEntity.host);
+  if (SecEntity.moninfo) free(SecEntity.moninfo);
 
   memset(&SecEntity, 0, sizeof (SecEntity));
 
@@ -1507,46 +1534,6 @@ int XrdHttpProtocol::xsslverifydepth(XrdOucStream & Config) {
   return 0;
 }
 
-
-
-
-
-
-/******************************************************************************/
-/*                                 x s e c l                                  */
-/******************************************************************************/
-
-/* Function: xsecl
-
-   Purpose:  To parse the directive: seclib <path>
-
-             <path>    the path of the security library to be used.
-
-  Output: 0 upon success or !0 upon failure.
- */
-
-int XrdHttpProtocol::xsecl(XrdOucStream & Config) {
-  char *val;
-
-  // Get the path
-  //
-  val = Config.GetWord();
-  if (!val || !val[0]) {
-    eDest.Emsg("Config", "XRootd seclib not specified");
-    return 1;
-  }
-
-  // Record the path
-  //
-  if (SecLib) free(SecLib);
-  SecLib = strdup(val);
-
-  return 0;
-}
-
-
-
-
 /******************************************************************************/
 /*                                 x s s l c e r t                            */
 /******************************************************************************/
@@ -1612,6 +1599,43 @@ int XrdHttpProtocol::xsslkey(XrdOucStream & Config) {
   return 0;
 }
 
+
+
+
+/******************************************************************************/
+/*                                     x g m a p                              */
+/******************************************************************************/
+
+/* Function: xgmap
+
+   Purpose:  To parse the directive: gridmap <path>
+
+             <path>    the path of the gridmap file to be used. Normally
+			it's /etc/grid-security/gridmap
+			No mapfile means no translation required
+			Pointing to a non existing mapfile is an error
+
+  Output: 0 upon success or !0 upon failure.
+ */
+
+int XrdHttpProtocol::xgmap(XrdOucStream & Config) {
+  char *val;
+
+  // Get the path
+  //
+  val = Config.GetWord();
+  if (!val || !val[0]) {
+    eDest.Emsg("Config", "HTTP X509 gridmap file location not specified");
+    return 1;
+  }
+
+  // Record the path
+  //
+  if (gridmap) free(gridmap);
+  gridmap = strdup(val);
+
+  return 0;
+}
 
 /******************************************************************************/
 /*                                 x s s l c a f i l e                        */
@@ -2171,22 +2195,14 @@ int XrdHttpProtocol::doStat(char *fname) {
 // Loads the SecXtractor plugin, if available
 int XrdHttpProtocol::LoadSecXtractor(XrdSysError *myeDest, const char *libName,
                                      const char *libParms) {
-    XrdSysPlugin     myLib(myeDest, libName, "secxtractorlib");
+    XrdVersionInfo *myVer = &XrdVERSIONINFOVAR(XrdgetProtocol);
+    XrdOucPinLoader myLib(myeDest, myVer, "secxtractorlib", libName);
     XrdHttpSecXtractor *(*ep)(XrdHttpSecXtractorArgs);
-    //static XrdVERSIONINFODEF (myVer, XrdHttpSecXtractor, XrdVNUMBER, XrdVERSION);
-
 
     // Get the entry point of the object creator
     //
-    ep = (XrdHttpSecXtractor *(*)(XrdHttpSecXtractorArgs))(myLib.getPlugin("XrdHttpGetSecXtractor"));
-    if (!ep) return 1;
-    myLib.Persist();
-
-    // Get the Object now
-    //
-    secxtractor = ep(myeDest, NULL, libParms);
-
-    return 0;
+    ep = (XrdHttpSecXtractor *(*)(XrdHttpSecXtractorArgs))(myLib.Resolve("XrdHttpGetSecXtractor"));
+    if (ep && (secxtractor = ep(myeDest, NULL, libParms))) return 0;
+    myLib.Unload();
+    return 1;
 }
-
-
