@@ -68,6 +68,7 @@ class XrdNetSocket;
 class XrdOucErrInfo;
 class XrdOucReqID;
 class XrdOucStream;
+class XrdOucTList;
 class XrdOucTokenizer;
 class XrdOucTrace;
 class XrdSfsDirectory;
@@ -133,7 +134,7 @@ enum RD_func {RD_chmod = 0, RD_chksum,  RD_dirlist, RD_locate, RD_mkdir,
        int   do_Bind();
        int   do_Chmod();
        int   do_CKsum(int canit);
-       int   do_CKsum(const char *Path, const char *Opaque);
+       int   do_CKsum(char *algT, const char *Path, const char *Opaque);
        int   do_Close();
        int   do_Dirlist();
        int   do_DirStat(XrdSfsDirectory *dp, char *pbuff, const char *opaque);
@@ -201,7 +202,7 @@ static int   xdig(XrdOucStream &Config);
 static int   xexp(XrdOucStream &Config);
 static int   xexpdo(char *path, int popt=0);
 static int   xfsl(XrdOucStream &Config);
-static char *xfsL(char *val);
+static int   xfsL(XrdOucStream &Config, char *val, int lix);
 static int   xpidf(XrdOucStream &Config);
 static int   xprep(XrdOucStream &Config);
 static int   xlog(XrdOucStream &Config);
@@ -252,13 +253,16 @@ static int                 WANPort;
 static int                 WANWindow;
 static char               *SecLib;
 static char               *FSLib[2];
+static int                 FSLvn[2];
 static char               *digLib;    // Normally zero for now
 static char               *digParm;
 static char               *Notify;
 static char                isRedir;
 static char                JobLCL;
+static char                JobCKCGI;
 static XrdXrootdJob       *JobCKS;
 static char               *JobCKT;
+static XrdOucTList        *JobCKTLST;
 static XrdOucReqID        *PrepID;
 
 // Static redirection

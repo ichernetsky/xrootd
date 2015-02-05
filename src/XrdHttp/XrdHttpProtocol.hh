@@ -68,6 +68,7 @@ class XrdLink;
 class XrdXrootdProtocol;
 class XrdHttpSecXtractor;
 struct XrdVersionInfo;
+class XrdOucGMap;
 
 
 class XrdHttpProtocol : public XrdProtocol {
@@ -118,7 +119,7 @@ public:
 
 
   /// Sends a basic response. If the length is < 0 then it is calculated internally
-  int SendSimpleResp(int code, char *desc, char *header_to_add, char *body, int bodylen);
+  int SendSimpleResp(int code, char *desc, char *header_to_add, char *body, long long bodylen);
 
 
 private:
@@ -150,7 +151,6 @@ private:
   
   /// Functions related to the configuration
   static int Config(const char *fn);
-  static int xsecl(XrdOucStream &Config);
   static int xtrace(XrdOucStream &Config);
   static int xsslcert(XrdOucStream &Config);
   static int xsslkey(XrdOucStream &Config);
@@ -163,6 +163,7 @@ private:
   static int xembeddedstatic(XrdOucStream &Config);
   static int xstaticredir(XrdOucStream &Config);
   static int xstaticpreload(XrdOucStream &Config);
+  static int xgmap(XrdOucStream &Config);
   static int xsslcafile(XrdOucStream &Config);
   static int xsslverifydepth(XrdOucStream &Config);
   static int xsecretkey(XrdOucStream &Config);
@@ -256,6 +257,10 @@ protected:
   /// Authentication area
   XrdSecEntity SecEntity;
 
+  
+  /// The instance of the DN mapper. Created only when a valid path is given
+  static XrdOucGMap      *servGMap;  // Grid mapping service
+   
   /// The Bridge that we use to exercise the xrootd internals
   XrdXrootd::Bridge *Bridge;
 
@@ -286,11 +291,13 @@ protected:
 
   /// Windowsize
   static int Window;
-  static char *SecLib;
 
   /// OpenSSL stuff
   static char *sslcert, *sslkey, *sslcadir, *sslcafile;
 
+  /// Gridmap file location. The same used by XrdSecGsi
+  static char *gridmap;// [s] gridmap file [/etc/grid-security/gridmap]
+   
   /// The key used to calculate the url hashes
   static char *secretkey;
 

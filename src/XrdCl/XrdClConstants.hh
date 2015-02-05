@@ -58,6 +58,11 @@ namespace XrdCl
   const int DefaultLoadBalancerTTL      = 1200;
   const int DefaultCPInitTimeout        = 600;
   const int DefaultCPTPCTimeout         = 1800;
+  const int DefaultTCPKeepAlive         = 0;
+  const int DefaultTCPKeepAliveTime     = 7200;
+  const int DefaultTCPKeepAliveInterval = 75;
+  const int DefaultTCPKeepAliveProbes   = 9;
+  const int DefaultMultiProtocol        = 0;
 
   const char * const DefaultPollerPreference   = "built-in,libevent";
   const char * const DefaultNetworkStack       = "IPAuto";

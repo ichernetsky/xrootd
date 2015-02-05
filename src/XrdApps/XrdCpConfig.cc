@@ -106,6 +106,7 @@ struct option XrdCpConfig::opVec[] =         // For getopt_long()
       {OPT_TYPE "verbose",   0, 0, XrdCpConfig::OpVerbose},
       {OPT_TYPE "version",   0, 0, XrdCpConfig::OpVersion},
       {OPT_TYPE "xrate",     1, 0, XrdCpConfig::OpXrate},
+      {OPT_TYPE "parallel",  1, 0, XrdCpConfig::OpParallel},
       {0,                    0, 0, 0}
      };
 
@@ -127,6 +128,7 @@ XrdCpConfig::XrdCpConfig(const char *pgm)
    pHost    = 0;
    pPort    = 0;
    xRate    = 0;
+   Parallel = 1;
    OpSpec   = 0;
    Dlvl     = 0;
    nSrcs    = 1;
@@ -266,6 +268,9 @@ do{while(optind < Argc && Legacy(optind)) {}
           case OpXrate:    OpSpec |= DoXrate;
                            if (!a2z(optarg, &xRate, 10*1024LL, -1)) Usage(22);
                            break;
+          case OpParallel: OpSpec |= DoParallel;
+                           if (!a2i(optarg, &Parallel, 1, 4)) Usage(22);
+                           break;
           case ':':        UMSG("'" <<OpName() <<"' argument missing.");
                            break;
           case '?':        if (!Legacy(optind-1))
@@ -347,7 +352,8 @@ do{while(optind < Argc && Legacy(optind)) {}
 
 // Do the dumb check
 //
-   if (isLcl) FMSG("All files are local; use 'cp' instead!", 1);
+   if (isLcl && Opts & optNoLclCp)
+      FMSG("All files are local; use 'cp' instead!", 1);
 
 // Check for checksum spec conflicts
 //
@@ -725,7 +731,7 @@ int XrdCpConfig::Legacy(const char *theOp, const char *theArg)
       return defOpt(theOp, theArg);
 
    if (!strcmp(theOp, "-extreme") || !strcmp(theOp, "-x"))
-      {if (nSrcs <= 1) nSrcs = dfltSrcs;
+      {if (nSrcs <= 1) {nSrcs = dfltSrcs; OpSpec |= DoSources;}
        return 1;
       }
 
@@ -832,7 +838,8 @@ void XrdCpConfig::Usage(int rc)
    "         [--force] [--help] [--infiles <fn>] [--license] [--nopbar]\n"
    "         [--posc] [--proxy <host>:<port>] [--recursive] [--retry <n>]\n"
    "         [--server] [--silent] [--sources <n>] [--streams <n>]\n"
-   "         [--tpc {first|only}] [--verbose] [--version] [--xrate <rate>]";
+   "         [--tpc {first|only}] [--verbose] [--version] [--xrate <rate>]\n"
+   "         [--parallel <n>]";
 
    static const char *Syntax2= "\n"
    "<src>:   [[x]root://<host>[:<port>]/]<path> | -";
@@ -874,7 +881,8 @@ void XrdCpConfig::Usage(int rc)
    "-v | --verbose      produces more information about the copy\n"
    "-V | --version      prints the version number\n"
    "-X | --xrate <rate> limits the transfer to the specified rate. You can\n"
-   "                    suffix the value with 'k', 'm', or 'g'\n\n"
+   "                    suffix the value with 'k', 'm', or 'g'\n"
+   "     --parallel <n> number of copy jobs to be run simultaneously\n\n"
    "Legacy options:     [-adler] [-DI<var> <val>] [-DS<var> <val>] [-np]\n"
    "                    [-md5] [-OD<cgi>] [-OS<cgi>] [-version] [-x]";
 

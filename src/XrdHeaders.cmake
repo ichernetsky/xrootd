@@ -2,7 +2,6 @@
 install(
   FILES
   ${CMAKE_BINARY_DIR}/src/XrdVersion.hh
-  ${CMAKE_SOURCE_DIR}/src/XrdVersionPlugin.hh
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/xrootd )
 
 set( XROOTD_PUBLIC_HEADERS
@@ -57,6 +56,7 @@ set( XROOTD_PUBLIC_HEADERS
   XrdOuc/XrdOucIOVec.hh
   XrdOuc/XrdOucLock.hh
   XrdOuc/XrdOucName2Name.hh
+  XrdOuc/XrdOucPinPath.hh
   XrdOuc/XrdOucRash.hh
   XrdOuc/XrdOucRash.icc
   XrdOuc/XrdOucSFVec.hh
@@ -93,6 +93,7 @@ set( XROOTD_PUBLIC_HEADERS
   XrdSys/XrdSysPthread.hh
   XrdSys/XrdSysSemWait.hh
   XrdSys/XrdSysTimer.hh
+  XrdSys/XrdSysXAttr.hh
   XrdSys/XrdSysXSLock.hh
   XrdXrootd/XrdXrootdMonData.hh
   XrdXrootd/XrdXrootdBridge.hh
@@ -117,6 +118,7 @@ set( XROOTD_PRIVATE_HEADERS
   XrdOfs/XrdOfsEvr.hh
   XrdOfs/XrdOfsHandle.hh
   XrdOfs/XrdOfsTrace.hh
+  XrdOfs/XrdOfsTPCInfo.hh
   XrdSys/XrdSysPriv.hh
 
   XrdOss/XrdOssApi.hh
@@ -124,6 +126,7 @@ set( XROOTD_PRIVATE_HEADERS
   XrdOss/XrdOssError.hh
   XrdOuc/XrdOucExport.hh
   XrdOuc/XrdOucPList.hh
+  
 )
 
 install_headers(

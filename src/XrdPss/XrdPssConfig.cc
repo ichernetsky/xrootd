@@ -46,13 +46,13 @@
 
 #include "XrdNet/XrdNetAddr.hh"
 #include "XrdNet/XrdNetUtils.hh"
+#include "XrdNet/XrdNetSecurity.hh"
 
 #include "XrdPss/XrdPss.hh"
 
 #include "XrdSys/XrdSysError.hh"
 #include "XrdSys/XrdSysHeaders.hh"
 #include "XrdSys/XrdSysPlatform.hh"
-#include "XrdSys/XrdSysPlugin.hh"
 #include "XrdSys/XrdSysPthread.hh"
 
 #include "XrdOuc/XrdOuca2x.hh"
@@ -60,6 +60,7 @@
 #include "XrdOuc/XrdOucEnv.hh"
 #include "XrdOuc/XrdOucExport.hh"
 #include "XrdOuc/XrdOucN2NLoader.hh"
+#include "XrdOuc/XrdOucPinLoader.hh"
 #include "XrdOuc/XrdOucStream.hh"
 #include "XrdOuc/XrdOucTList.hh"
 #include "XrdOuc/XrdOucUtils.hh"
@@ -76,7 +77,7 @@
 
 #define TS_Xeq(x,m)    if (!strcmp(x,var)) return m(&eDest, Config);
 
-/******************************************************************************/
+/*******x**********************************************************************/
 /*                               G l o b a l s                                */
 /******************************************************************************/
 
@@ -87,6 +88,8 @@ uid_t        XrdPssSys::myUid     =  geteuid();
 gid_t        XrdPssSys::myGid     =  getegid();
 
 XrdOucPListAnchor XrdPssSys::XPList;
+
+XrdNetSecurity   *XrdPssSys::Police[XrdPssSys::PolNum] = {0, 0};
 
 XrdOucTList *XrdPssSys::ManList   =  0;
 const char  *XrdPssSys::urlPlain  =  0;
@@ -394,6 +397,7 @@ int XrdPssSys::ConfigXeq(char *var, XrdOucStream &Config)
    TS_Xeq("config",        xconf);
    TS_Xeq("inetmode",      xinet);
    TS_Xeq("origin",        xorig);
+   TS_Xeq("permit",        xperm);
    TS_Xeq("setopt",        xsopt);
    TS_Xeq("trace",         xtrac);
    TS_Xeq("namelib",       xnml);
@@ -426,20 +430,20 @@ int XrdPssSys::ConfigXeq(char *var, XrdOucStream &Config)
 
 int XrdPssSys::getCache()
 {
-   XrdSysPlugin     myLib(&eDest, cPath, "cachelib", myVersion);
+   XrdOucPinLoader  myLib(&eDest,myVersion,"cachelib",cPath);
    XrdOucCache     *(*ep)(XrdSysLogger *, const char *, const char *);
    XrdOucCache     *theCache;
 
 // Now get the entry point of the object creator
 //
    ep = (XrdOucCache *(*)(XrdSysLogger *, const char *, const char *))
-                    (myLib.getPlugin("XrdOucGetCache"));
+                    (myLib.Resolve("XrdOucGetCache"));
    if (!ep) return 0;
 
 // Get the Object now
 //
    theCache = ep(eDest.logger(), ConfigFN, cParm);
-   if (theCache) {XrdPosixXrootd::setCache(theCache); myLib.Persist();}
+   if (theCache) {XrdPosixXrootd::setCache(theCache);}
       else eDest.Emsg("Config", "Unable to get cache object from", cPath);
    return theCache != 0;
 }
@@ -547,7 +551,7 @@ do{for (i = 0; i < numopts; i++) if (!strcmp(szopts[i].Key, val)) break;
 
 /* Function: xcacl
 
-   Purpose:  To parse the directive: cachelib <path> [<parms>]
+   Purpose:  To parse the directive: cachelib {<path>|default} [<parms>]
 
              <path>    the path of the cache library to be used.
              <parms>   optional parms to be passed
@@ -567,7 +571,7 @@ int XrdPssSys::xcacl(XrdSysError *Eroute, XrdOucStream &Config)
 // Save the path
 //
    if (cPath) free(cPath);
-   cPath = strdup(val);
+   cPath = (strcmp(val,"default") ? strdup(val) : strdup("libXrdFileCache.so"));
 
 // Get the parameters
 //
@@ -876,6 +880,45 @@ int XrdPssSys::xorig(XrdSysError *errp, XrdOucStream &Config)
 }
   
 /******************************************************************************/
+/*                                 x p e r m                                  */
+/******************************************************************************/
+
+/* Function: xperm
+
+   Purpose:  To parse the directive: permit [/] [*] <name>
+
+                    netgroup name the host must be a member of. For DNS names,
+                    A single asterisk may be specified anywhere in the name.
+
+   Output: 0 upon success or !0 upon failure.
+*/
+
+int XrdPssSys::xperm(XrdSysError *Eroute, XrdOucStream &Config)
+{   char *val;
+    bool pType[PolNum] = {false, false};
+    int i;
+
+do {if (!(val = Config.GetWord()))
+       {Eroute->Emsg("Config", "permit target not specified"); return 1;}
+         if (!strcmp(val, "/")) pType[PolPath] = true;
+    else if (!strcmp(val, "*")) pType[PolObj ] = true;
+    else break;
+   } while(1);
+
+    if (!pType[PolPath] && !pType[PolObj])
+       pType[PolPath] = pType[PolObj] = true;
+
+    for (i = 0; i < PolNum; i++)
+        {if (pType[i])
+            {if (!Police[i]) Police[i] = new XrdNetSecurity();
+                             Police[i]->AddHost(val);
+            }
+        }
+
+    return 0;
+}
+
+/******************************************************************************/
 /*                                 x s o p t                                  */
 /******************************************************************************/
 
@@ -898,6 +941,7 @@ int XrdPssSys::xsopt(XrdSysError *Eroute, XrdOucStream &Config)
          {"ConnectTimeout",             "ConnectionWindow"},    // Default  120
          {"DataServerConn_ttl",         ""},
          {"DebugLevel",                 "*"},                   // Default   -1
+         {"DebugMask",                 "*"},                    // Default   -1
          {"DfltTcpWindowSize",          0},
          {"LBServerConn_ttl",           ""},
          {"ParStreamsPerPhyConn",       "SubStreamsPerChannel"},// Default    1
