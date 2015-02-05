@@ -180,6 +180,7 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
   /* use native when sourece and destintation belong to the same node */
   const char *srcNode = (XrdFixedFS.getWriteRedirector()->node(oPath));
   const char *tgtNode = (XrdFixedFS.getWriteRedirector()->node(nPath));
+  const char* port = (XrdFixedFS.getWriteRedirector()->getPort());   
 
   if (strncmp(srcNode, tgtNode, XRD_FIXED_MAX_HOSTNAME_LEN + 1) == 0)
       return redirect(oPath, eInfo);
@@ -187,13 +188,13 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
   char srcUrl[XRD_FIXED_MAX_URL_LEN] = {0};
   char tgtUrl[XRD_FIXED_MAX_URL_LEN] = {0};
   
-  if (snprintf(srcUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:1094/%s", srcNode, oPath) >= XRD_FIXED_MAX_URL_LEN) {
+  if (snprintf(srcUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", srcNode, port, oPath) >= XRD_FIXED_MAX_URL_LEN) {
       const char* err = "Error: source url length exceeds the limit";
       FixedEroute.Say(err);
       eInfo.setErrInfo(-1, err);
       return SFS_ERROR;
   }
-  if (snprintf(tgtUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:1094/%s", tgtNode, nPath) >= XRD_FIXED_MAX_URL_LEN) {
+  if (snprintf(tgtUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", tgtNode, port, nPath) >= XRD_FIXED_MAX_URL_LEN) {
       const char* err = "Error: target url length exceeds the limit";
       FixedEroute.Say(err);
       eInfo.setErrInfo(-1, err);
@@ -274,9 +275,10 @@ void XrdFixed::setWriteRedirector(XrdFixedRedirector* r) { writeRedirector = r; 
 
 /* Redirect a request to the right node */
 int XrdFixed::redirect(const char* path, XrdOucErrInfo &eInfo) {
-  const char *dataNode = (writeRedirector->node(path));
+  const char *dataNode = writeRedirector->node(path);
+  unsigned int n_port = writeRedirector->getNumericPort();
   eInfo.Reset();
-  eInfo.setErrInfo(1094, dataNode);
+  eInfo.setErrInfo(n_port, dataNode);
   return SFS_REDIRECT;
 }
 
@@ -333,9 +335,10 @@ int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
   }
 
   /* otherwise, always redirect */
-  const char *dataNode = (XrdFixedFS.getWriteRedirector()->node(fileName));
+  const char *dataNode = XrdFixedFS.getWriteRedirector()->node(fileName);
+  unsigned int n_port = XrdFixedFS.getWriteRedirector()->getNumericPort();
   FixedEroute.Say("Redirecting to ", dataNode);
-  this->error.setErrInfo(1094, dataNode);
+  this->error.setErrInfo(n_port, dataNode);
   return SFS_REDIRECT;
 }
 

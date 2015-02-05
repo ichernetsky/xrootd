@@ -48,6 +48,7 @@ XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN,
     XrdOucStream Config(NULL, getenv("XRDINSTANCE"), &myEnv, "=====> ");
     int cfgFD;
     char *var;
+    n_port = 0;
     
     if (!ConfigFN || !*ConfigFN)
         FixedEroute.Emsg("Config", "Configuration file not specified");
@@ -62,6 +63,24 @@ XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN,
 
         /* Read the data server list */
         while ((var = Config.GetMyFirstWord())) {
+            if (strncmp(var, "xrd.port", 8) == 0) {
+                if (!(var = Config.GetWord())) {
+                    FixedEroute.Emsg("Config", "xrd.port value missing");
+                    str_port[0] = '\0';
+                    n_port = 0;
+                    return;
+                }
+
+                n_port = strtol(var, NULL, 10);
+                if (n_port > 65535) {
+                    FixedEroute.Emsg("Config", "Invalid xrd.port value");
+                    str_port[0] = '\0';
+                    n_port = 0;
+                    return;
+                }
+
+                strncpy(str_port, var, 5);
+            }
             if (strncmp(var, "fixed.hosts", 11) == 0) {
 
                 if (!(var = Config.GetWord())) {
@@ -103,7 +122,10 @@ XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN,
         }
 
     }
-
+    if (str_port == NULL) { 
+        strncpy(str_port, XRD_FIXED_DEFAULT_PORT, XRD_FIXED_DEFAULT_PORT_LEN);
+        n_port = XRD_FIXED_DEFAULT_N_PORT;
+    }
 }
 
 XrdFixedRedirector::~XrdFixedRedirector() {
@@ -119,6 +141,14 @@ const char* XrdFixedRedirector::node(const char* path) {
     unsigned int nodeIndex = result[0] % nNodes;
     Eroute.Emsg("XrdFixedRedirector", path, nodes[nodeIndex]);
     return nodes[nodeIndex];
+}
+
+const char* XrdFixedRedirector::getPort() {
+    return str_port;
+}
+
+unsigned int XrdFixedRedirector::getNumericPort() {
+    return n_port;
 }
 
 /* Return a number of available nodes */

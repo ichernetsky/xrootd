@@ -46,6 +46,10 @@ public:
   /* Return number of nodes */
   long getnNodes();
 
+  /* Return the port */
+  const char* getPort();
+  unsigned int getNumericPort();
+
   /* Constructor and Destructor */
   XrdFixedRedirector(const char* configFN, XrdSysError& FixedEroute, XrdOucTrace& FixedTrace);
   virtual ~XrdFixedRedirector();
@@ -53,6 +57,8 @@ public:
 private:
     char nodes[XRD_FIXED_MAX_CLUSTER_SIZE - 1][XRD_FIXED_MAX_HOSTNAME_LEN + 1];
     long nNodes;
+    char str_port[6];
+    unsigned int n_port;
     XrdSysError& Eroute; 
     XrdOucTrace& Trace;
 }; // class XrdFixedRedirector
