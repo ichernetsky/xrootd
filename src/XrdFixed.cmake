@@ -16,13 +16,8 @@ add_library(
   XrdFixed
   SHARED
   XrdFixed/XrdFixedDefines.hh
-  XrdFixed/XrdFixed.cc           XrdFixed/XrdFixed.hh 
+  XrdFixed/XrdFixed.cc           XrdFixed/XrdFixed.hh
   XrdFixed/XrdFixedRedirector.cc XrdFixed/XrdFixedRedirector.hh )
-
-target_link_libraries(
-  XrdFixed 
-  XrdCl
-  ${OPENSSL_LIBRARIES} )
 
 set_target_properties(
   XrdFixed
@@ -32,9 +27,32 @@ set_target_properties(
   INTERFACE_LINK_LIBRARIES ""
   LINK_INTERFACE_LIBRARIES "" )
 
+target_link_libraries(
+  XrdFixed
+  XrdCl
+  ${OPENSSL_LIBRARIES} )
+
+add_library(
+  XrdFixedDataNode
+  SHARED
+  XrdFixed/XrdFixedDefines.hh
+  XrdFixed/XrdFixedDataNode.cc   XrdFixed/XrdFixedDataNode.hh )
+
+set_target_properties(
+  XrdFixedDataNode
+  PROPERTIES
+  VERSION   ${XRD_FIXED_VERSION}
+  SOVERSION ${XRD_FIXED_SOVERSION}
+  INTERFACE_LINK_LIBRARIES ""
+  LINK_INTERFACE_LIBRARIES "" )
+
+target_link_libraries(
+  XrdFixedDataNode
+  XrdCl )
+
 #-------------------------------------------------------------------------------
 # Install
 #-------------------------------------------------------------------------------
 install(
-  TARGETS XrdFixed
+  TARGETS XrdFixed XrdFixedDataNode
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} )

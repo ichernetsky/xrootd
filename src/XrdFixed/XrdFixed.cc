@@ -65,7 +65,7 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
     FixedEroute.Emsg("XrdFixed", "native file system object can not be null");
     return NULL;
   }
-  
+
   XrdFixedFS.setNativeFS(nativeFS);
   XrdFixedRedirector* writeRedirector = new XrdFixedRedirector(configFN, FixedEroute, FixedTrace);
 
@@ -88,7 +88,7 @@ XrdFixed::XrdFixed() : nativeFS(NULL) {}
 /*****************************************************************************/
 /*                  X r d F i x e d   d e s t r u c t o r                    */
 /*****************************************************************************/
-XrdFixed::~XrdFixed() { 
+XrdFixed::~XrdFixed() {
     if (writeRedirector) delete writeRedirector;
 }
 
@@ -180,14 +180,14 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
   /* use native when sourece and destintation belong to the same node */
   const char *srcNode = (XrdFixedFS.getWriteRedirector()->node(oPath));
   const char *tgtNode = (XrdFixedFS.getWriteRedirector()->node(nPath));
-  const char* port = (XrdFixedFS.getWriteRedirector()->getPort());   
+  const char* port = (XrdFixedFS.getWriteRedirector()->getPort());
 
   if (strncmp(srcNode, tgtNode, XRD_FIXED_MAX_HOSTNAME_LEN + 1) == 0)
       return redirect(oPath, eInfo);
 
   char srcUrl[XRD_FIXED_MAX_URL_LEN] = {0};
   char tgtUrl[XRD_FIXED_MAX_URL_LEN] = {0};
-  
+
   if (snprintf(srcUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", srcNode, port, oPath) >= XRD_FIXED_MAX_URL_LEN) {
       const char* err = "Error: source url length exceeds the limit";
       FixedEroute.Say(err);
@@ -201,7 +201,7 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
       return SFS_ERROR;
   }
 
-  // Else copy the file and then rename 
+  // Else copy the file and then rename
   //return nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
   XrdCl::CopyProcess cp;
   XrdCl::PropertyList properties, results;
@@ -211,34 +211,34 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
   properties.Set("makeDir", true);
 
   XrdCl::XRootDStatus st;
-  st = cp.AddJob(properties, &results); 
+  st = cp.AddJob(properties, &results);
   if (!st.IsOK()) {
       FixedEroute.Say("Error: adding copy job failed ", st.ToString().c_str());
       eInfo.setErrInfo(st.errNo, st.ToString().c_str());
-      return SFS_ERROR; 
+      return SFS_ERROR;
   }
 
-  st = cp.Prepare(); 
+  st = cp.Prepare();
   if (!st.IsOK()) {
       FixedEroute.Say("Error: prepare failed for copy job ", st.ToString().c_str());
       eInfo.setErrInfo(st.errNo, st.ToString().c_str());
       return SFS_ERROR;
   }
-  st = cp.Run(0); 
+  st = cp.Run(0);
   if (!st.IsOK()) {
       FixedEroute.Say("Error: run failed for copy job ", st.ToString().c_str());
       eInfo.setErrInfo(st.errNo, st.ToString().c_str());
       return SFS_ERROR;
   }
 
-  // Remove original file 
+  // Remove original file
   std::string strSrcNode(srcNode);
   XrdCl::FileSystem fs(strSrcNode);
   st = fs.Rm(oPath);
   if (!st.IsOK()) {
       FixedEroute.Say("Error: Could not remove original file ");
       eInfo.setErrInfo(st.errNo, st.ToString().c_str());
-      return SFS_ERROR;    
+      return SFS_ERROR;
   }
 
   return SFS_OK;
@@ -318,20 +318,20 @@ int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
   char open_flags[open_flag_len] = {0};
   //int flags_index = 0;
 
-  snprintf(msg, 2048, "XrdFixedFile::open fileName: %s, openMode: %s, createmode: %d, opaque: %s", 
+  snprintf(msg, 2048, "XrdFixedFile::open fileName: %s, openMode: %s, createmode: %d, opaque: %s",
            fileName, open_flags, createMode, opaque);
   FixedEroute.Say(msg);
-  
+
   /* if someone is not trying to modify the file pass the request through */
-  if (!(openMode & SFS_O_WRONLY) && !(openMode & SFS_O_RDWR) && 
-      !(openMode & SFS_O_CREAT) && !(openMode & SFS_O_TRUNC) && 
+  if (!(openMode & SFS_O_WRONLY) && !(openMode & SFS_O_RDWR) &&
+      !(openMode & SFS_O_CREAT) && !(openMode & SFS_O_TRUNC) &&
       !(openMode & SFS_O_MKPTH) && !(SFS_O_RESET)) {
       this->error.Reset();
       nativeFile->error = this->error;
- 
+
       if ((ret = nativeFile->open(fileName, openMode, createMode, client, opaque)) != SFS_OK)
           this->error = nativeFile->error;
-      return ret;      
+      return ret;
   }
 
   /* otherwise, always redirect */
@@ -350,10 +350,10 @@ int XrdFixedFile::close() {
 
 /* Execute a special operation on the file */
 int XrdFixedFile::fctl(const int cmd, const char *args, XrdOucErrInfo &eInfo) {
-  
+
   int ret;
   FixedEroute.Say("XrdFixedFile::fctnl");
-  
+
   this->error.Reset();
   nativeFile->error = this->error;
 
@@ -378,7 +378,7 @@ int XrdFixedFile::getMmap(void **Addr, off_t &Size) {
 /* Preread file blocks into the file system cache */
 XrdSfsXferSize XrdFixedFile::read(XrdSfsFileOffset offset,
                                   XrdSfsXferSize size) {
-  int ret;    
+  int ret;
   FixedEroute.Say("XrdFixedFile::read 1");
   this->error.Reset();
   nativeFile->error = this->error;
@@ -421,7 +421,7 @@ XrdSfsXferSize XrdFixedFile::read(XrdSfsAio *aioparam) {
 /* Write file bytes from a buffer */
 XrdSfsXferSize XrdFixedFile::write(XrdSfsFileOffset offset, const char *buffer,
                                    XrdSfsXferSize size) {
-  int ret;    
+  int ret;
   FixedEroute.Say("XrdFixedFile::write 1");
   this->error.Reset();
   nativeFile->error = this->error;
@@ -453,28 +453,28 @@ int XrdFixedFile::stat(struct stat *buf) {
 
 /* Make sure all the outstanding data is actually written on the file (sync) */
 int XrdFixedFile::sync() {
-  
-  int ret;    
+
+  int ret;
   FixedEroute.Say("XrdFixedFile::sync 1");
 
   this->error.Reset();
   nativeFile->error = this->error;
   if ((ret = nativeFile->sync()) != SFS_OK)
       this->error = nativeFile->error;
-  
+
   return ret;
 }
 
 /* Make sure all outstanding data is actually written to the file (async) */
 int XrdFixedFile::sync(XrdSfsAio *aiop) {
-  int ret;    
+  int ret;
   FixedEroute.Say("XrdFixedFile::sync 2");
 
   this->error.Reset();
   nativeFile->error = this->error;
   if ((ret = nativeFile->sync(aiop)) != SFS_OK)
       this->error = nativeFile->error;
-  
+
   return ret;
 }
 
@@ -524,12 +524,12 @@ XrdFixedDirectory::~XrdFixedDirectory() {
 /* Open a directory. */
 int XrdFixedDirectory::open(const char *path, const XrdSecEntity *client,
                             const char *opaque) {
-  int ret;    
+  int ret;
   FixedEroute.Say("XrdFixedDirectory::open");
 
   this->error.Reset();
   nativeDirectory->error = this->error;
- 
+
   if ((ret = nativeDirectory->open(path, client, opaque)) != SFS_OK)
     this->error = nativeDirectory->error;
 
