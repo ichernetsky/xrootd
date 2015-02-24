@@ -207,8 +207,8 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
   XrdCl::PropertyList properties, results;
   properties.Set("source", srcUrl);
   properties.Set("target", tgtUrl);
-  properties.Set("thirdParty", "first");
   properties.Set("makeDir", true);
+  properties.Set("force", true);
 
   XrdCl::XRootDStatus st;
   st = cp.AddJob(properties, &results);
