@@ -236,8 +236,8 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
   XrdCl::FileSystem fs(strSrcNode);
   st = fs.Rm(oPath);
   if (!st.IsOK()) {
-      FixedEroute.Say("Error: Could not remove original file ");
-      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
+      FixedEroute.Say("Warning: Could not remove original file ", st.ToString().c_str());
+      //eInfo.setErrInfo(st.errNo, st.ToString().c_str());
       //return SFS_ERROR;
   }
 
