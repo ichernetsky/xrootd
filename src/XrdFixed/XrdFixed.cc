@@ -187,6 +187,7 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
 
   char srcUrl[XRD_FIXED_MAX_URL_LEN] = {0};
   char tgtUrl[XRD_FIXED_MAX_URL_LEN] = {0};
+  char srcNodePort[XRD_FIXED_MAX_URL_LEN] = {0};
 
   if (snprintf(srcUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", srcNode, port, oPath) >= XRD_FIXED_MAX_URL_LEN) {
       const char* err = "Error: source url length exceeds the limit";
@@ -195,6 +196,14 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
       return SFS_ERROR;
   }
   if (snprintf(tgtUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", tgtNode, port, nPath) >= XRD_FIXED_MAX_URL_LEN) {
+      const char* err = "Error: target url length exceeds the limit";
+      FixedEroute.Say(err);
+      eInfo.setErrInfo(-1, err);
+      return SFS_ERROR;
+  }
+
+  if (snprintf(srcNodePort, XRD_FIXED_MAX_URL_LEN, "root://%s:%s", srcNode, port) >= XRD_FIXED_MAX_URL_LEN) {
+      // Should never get here
       const char* err = "Error: target url length exceeds the limit";
       FixedEroute.Say(err);
       eInfo.setErrInfo(-1, err);
@@ -232,9 +241,9 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
   }
 
   // Remove original file
-  std::string strSrcNode(srcNode);
+  std::string strSrcNode(srcNodePort);
   XrdCl::FileSystem fs(strSrcNode);
-  st = fs.Rm(oPath);
+
   if (!st.IsOK()) {
       FixedEroute.Say("Warning: Could not remove original file ", st.ToString().c_str());
       //eInfo.setErrInfo(st.errNo, st.ToString().c_str());
