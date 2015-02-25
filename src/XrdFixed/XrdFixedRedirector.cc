@@ -29,6 +29,7 @@
 #include <openssl/md5.h>
 #include <string.h>
 #include <fcntl.h>
+#include <assert.h>
 
 #include "XrdOuc/XrdOucEnv.hh"
 #include "XrdOuc/XrdOucStream.hh"
@@ -134,18 +135,15 @@ XrdFixedRedirector::~XrdFixedRedirector() {
 /* Given a file name return a node name where the file should be created */
 const char* XrdFixedRedirector::node(const char* path) {
     unsigned char result[MD5_DIGEST_LENGTH];
+    char normPath[XRD_FIXED_MAX_URL_LEN] = {0};
+    unsigned int normPathLen = XRD_FIXED_MAX_URL_LEN;
 
-    unsigned int len = strlen(path);
-
-    // Strip all '/' from the end
-    while ((len > 1) && (path[len - 1] == '/'))
-        --len;
-
-    MD5((const unsigned char*) path, len, result);
+    normalizePath(path, normPath, &normPathLen);
+    MD5((const unsigned char*) normPath, normPathLen, result);
 
     /* use the first byte of the checksum to see which node to choose */
     unsigned int nodeIndex = result[0] % nNodes;
-    Eroute.Emsg("XrdFixedRedirector", path, nodes[nodeIndex]);
+    Eroute.Emsg("XrdFixedRedirector", path, normPath, nodes[nodeIndex]);
     return nodes[nodeIndex];
 }
 
@@ -155,6 +153,34 @@ const char* XrdFixedRedirector::getPort() {
 
 unsigned int XrdFixedRedirector::getNumericPort() {
     return n_port;
+}
+
+void XrdFixedRedirector::normalizePath(const char* path, char* normalizedPath, unsigned int* size) {
+    unsigned int len = strlen(path);
+    assert(*size >= len);
+
+    unsigned int i = 0;
+    unsigned int j = 0;
+
+    while (i < len) {
+        normalizedPath[i] = path[j];
+        ++j;
+
+        /* advance i while removing duplicate occurences of '/' */
+        if (path[i] != '/')
+            i++;
+        else {
+            while (i < len && path[i] == '/')
+                ++i;
+        }
+    }
+
+    /* strip '/' at the end */
+    while ((j > 1) && (normalizedPath[j] == '/'))
+        --j;
+
+    normalizedPath[j] = '\0';
+    *size = j;
 }
 
 /* Return a number of available nodes */

@@ -55,12 +55,14 @@ public:
   virtual ~XrdFixedRedirector();
 
 private:
-    char nodes[XRD_FIXED_MAX_CLUSTER_SIZE - 1][XRD_FIXED_MAX_HOSTNAME_LEN + 1];
-    long nNodes;
-    char str_port[6];
-    unsigned int n_port;
-    XrdSysError& Eroute; 
-    XrdOucTrace& Trace;
+  void normalizePath(const char* path, char* normalizedPath, unsigned int* size);
+
+  char nodes[XRD_FIXED_MAX_CLUSTER_SIZE - 1][XRD_FIXED_MAX_HOSTNAME_LEN + 1];
+  long nNodes;
+  char str_port[6];
+  unsigned int n_port;
+  XrdSysError& Eroute; 
+  XrdOucTrace& Trace;
 }; // class XrdFixedRedirector
 
 #endif // __XRD_FIXED_REDIRECTOR_H__
