@@ -67,7 +67,8 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
   }
 
   XrdFixedFS.setNativeFS(nativeFS);
-  XrdFixedRedirector* writeRedirector = new XrdFixedRedirector(configFN, FixedEroute, FixedTrace);
+  XrdFixedRedirector* writeRedirector = new XrdFixedRedirector(configFN,
+                                            FixedEroute, FixedTrace);
 
   if (writeRedirector->getnNodes() < 1) {
     FixedEroute.Emsg("XrdFixed", "data node configuration error");
@@ -176,81 +177,7 @@ int XrdFixed::rename(const char *oPath, const char *nPath, XrdOucErrInfo &eInfo,
                      const XrdSecEntity *client, const char *opaqueO,
                      const char *opaqueN) {
   FixedEroute.Say("XrdFixed::rename");
-
-  /* use native when sourece and destintation belong to the same node */
-  const char *srcNode = (XrdFixedFS.getWriteRedirector()->node(oPath));
-  const char *tgtNode = (XrdFixedFS.getWriteRedirector()->node(nPath));
-  const char* port = (XrdFixedFS.getWriteRedirector()->getPort());
-
-  if (strncmp(srcNode, tgtNode, XRD_FIXED_MAX_HOSTNAME_LEN + 1) == 0)
-      return redirect(oPath, eInfo);
-
-  char srcUrl[XRD_FIXED_MAX_URL_LEN] = {0};
-  char tgtUrl[XRD_FIXED_MAX_URL_LEN] = {0};
-  char srcNodePort[XRD_FIXED_MAX_URL_LEN] = {0};
-
-  if (snprintf(srcUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", srcNode, port, oPath) >= XRD_FIXED_MAX_URL_LEN) {
-      const char* err = "Error: source url length exceeds the limit";
-      FixedEroute.Say(err);
-      eInfo.setErrInfo(-1, err);
-      return SFS_ERROR;
-  }
-  if (snprintf(tgtUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", tgtNode, port, nPath) >= XRD_FIXED_MAX_URL_LEN) {
-      const char* err = "Error: target url length exceeds the limit";
-      FixedEroute.Say(err);
-      eInfo.setErrInfo(-1, err);
-      return SFS_ERROR;
-  }
-
-  if (snprintf(srcNodePort, XRD_FIXED_MAX_URL_LEN, "root://%s:%s", srcNode, port) >= XRD_FIXED_MAX_URL_LEN) {
-      // Should never get here
-      const char* err = "Error: target url length exceeds the limit";
-      FixedEroute.Say(err);
-      eInfo.setErrInfo(-1, err);
-      return SFS_ERROR;
-  }
-
-  // Else copy the file and then rename
-  //return nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
-  XrdCl::CopyProcess cp;
-  XrdCl::PropertyList properties, results;
-  properties.Set("source", srcUrl);
-  properties.Set("target", tgtUrl);
-  properties.Set("makeDir", true);
-  properties.Set("force", true);
-
-  XrdCl::XRootDStatus st;
-  st = cp.AddJob(properties, &results);
-  if (!st.IsOK()) {
-      FixedEroute.Say("Error: adding copy job failed ", st.ToString().c_str());
-      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
-      return SFS_ERROR;
-  }
-
-  st = cp.Prepare();
-  if (!st.IsOK()) {
-      FixedEroute.Say("Error: prepare failed for copy job ", st.ToString().c_str());
-      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
-      return SFS_ERROR;
-  }
-  st = cp.Run(0);
-  if (!st.IsOK()) {
-      FixedEroute.Say("Error: run failed for copy job ", st.ToString().c_str());
-      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
-      return SFS_ERROR;
-  }
-
-  // Remove original file
-  std::string strSrcNode(srcNodePort);
-  XrdCl::FileSystem fs(strSrcNode);
-
-  if (!st.IsOK()) {
-      FixedEroute.Say("Warning: Could not remove original file ", st.ToString().c_str());
-      //eInfo.setErrInfo(st.errNo, st.ToString().c_str());
-      //return SFS_ERROR;
-  }
-
-  return SFS_OK;
+  return redirect(oPath, eInfo);
 }
 
 /* Return state information on file or a directory */

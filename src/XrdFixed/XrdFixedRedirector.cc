@@ -188,4 +188,3 @@ long XrdFixedRedirector::getnNodes() {
     return nNodes;
 }
 
-

@@ -29,6 +29,7 @@
 /******************************************************************************/
 
 #include "XrdSfs/XrdSfsInterface.hh"
+#include "XrdFixed/XrdFixedRedirector.hh"
 
 /*****************************************************************************/
 /*                  C l a s s    X r d F i x e d D i r e c t o r y           */
@@ -191,10 +192,13 @@ public:
 
   /* Internal functions */
   void setNativeFS(XrdSfsFileSystem *nativeFS);
+  void setWriteRedirector(XrdFixedRedirector *r);
+
+  XrdFixedRedirector* getWriteRedirector();
 
 private:
-
   XrdSfsFileSystem *nativeFS;
+  XrdFixedRedirector *writeRedirector;
 }; // XrdFixedDataNode
 
 #endif

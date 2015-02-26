@@ -34,6 +34,10 @@
 #include "XrdSys/XrdSysError.hh"
 #include "XrdOuc/XrdOucTrace.hh"
 
+#include "XrdCl/XrdClCopyProcess.hh"
+#include "XrdCl/XrdClFileSystem.hh"
+#include "XrdCl/XrdClURL.hh"
+
 /*****************************************************************************/
 /*                  X r d F i x e d   E r r o r  r o u t i n g               */
 /*****************************************************************************/
@@ -55,7 +59,7 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
                                       const char *configFN) {
   FixedEroute.SetPrefix("fixedDataNode_");
   FixedEroute.logger(logger);
-  FixedEroute.Say("(c) 2015 Qualys Inc. XrdFixedDataNode version " XrdVSTRING);
+  //FixedEroute.Say("(c) 2015 Qualys Inc. XrdFixedDataNode version " XrdVSTRING);
 
   if (nativeFS == NULL) {
     FixedEroute.Emsg("XrdFixedDataNode ", "native file system object can not be null");
@@ -63,10 +67,17 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
   }
 
   XrdFixedDataNodeFS.setNativeFS(nativeFS);
+  XrdFixedRedirector* writeRedirector = new XrdFixedRedirector(configFN,
+                                        FixedEroute, FixedTrace);
+  if (writeRedirector->getnNodes() < 1) {
+      FixedEroute.Emsg("XrdFixedDataNode", "data node configuration error");
+      return NULL;
+  }
 
+  XrdFixedDataNodeFS.setWriteRedirector(writeRedirector);
   return &XrdFixedDataNodeFS;
 }
-}
+} // extern "C"
 
 /*****************************************************************************/
 /*       X r d F i x e d D a t a N o d e   c o n s t r u c t o r             */
@@ -160,7 +171,78 @@ int XrdFixedDataNode::rename(const char *oPath, const char *nPath, XrdOucErrInfo
                              const XrdSecEntity *client, const char *opaqueO,
                              const char *opaqueN) {
   FixedEroute.Say("XrdFixedDataNode ","rename ", oPath, nPath);
-  return nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
+  /* use native when sourece and destintation belong to the same node */
+  const char *srcNode = (XrdFixedDataNodeFS.getWriteRedirector()->node(oPath));
+  const char *tgtNode = (XrdFixedDataNodeFS.getWriteRedirector()->node(nPath));
+  const char* port = (XrdFixedDataNodeFS.getWriteRedirector()->getPort());
+
+  if (strncmp(srcNode, tgtNode, XRD_FIXED_MAX_HOSTNAME_LEN + 1) == 0)
+    return nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
+
+  char srcUrl[XRD_FIXED_MAX_URL_LEN] = {0};
+  char tgtUrl[XRD_FIXED_MAX_URL_LEN] = {0};
+  char srcNodePort[XRD_FIXED_MAX_URL_LEN] = {0};
+
+  if (snprintf(srcUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", srcNode, port, oPath) >= XRD_FIXED_MAX_URL_LEN) {
+      const char* err = "Error: source url length exceeds the limit";
+      FixedEroute.Say(err);
+      eInfo.setErrInfo(-1, err);
+      return SFS_ERROR;
+  }
+  if (snprintf(tgtUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", tgtNode, port, nPath) >= XRD_FIXED_MAX_URL_LEN) {
+      const char* err = "Error: target url length exceeds the limit";
+      FixedEroute.Say(err);
+      eInfo.setErrInfo(-1, err);
+      return SFS_ERROR;
+  }
+
+  if (snprintf(srcNodePort, XRD_FIXED_MAX_URL_LEN, "root://%s:%s", srcNode, port) >= XRD_FIXED_MAX_URL_LEN) {
+      // Should never get here
+      const char* err = "Error: target url length exceeds the limit";
+      FixedEroute.Say(err);
+      eInfo.setErrInfo(-1, err);
+      return SFS_ERROR;
+  }
+
+  XrdCl::CopyProcess cp;
+  XrdCl::PropertyList properties, results;
+  properties.Set("source", srcUrl);
+  properties.Set("target", tgtUrl);
+  properties.Set("makeDir", true);
+  properties.Set("force", true);
+
+  XrdCl::XRootDStatus st;
+  st = cp.AddJob(properties, &results);
+  if (!st.IsOK()) {
+      FixedEroute.Say("Error: adding copy job failed ", st.ToString().c_str());
+      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
+      return SFS_ERROR;
+  }
+
+  st = cp.Prepare();
+  if (!st.IsOK()) {
+      FixedEroute.Say("Error: prepare failed for copy job ", st.ToString().c_str());
+      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
+      return SFS_ERROR;
+  }
+  st = cp.Run(0);
+  if (!st.IsOK()) {
+      FixedEroute.Say("Error: run failed for copy job ", st.ToString().c_str());
+      eInfo.setErrInfo(st.errNo, st.ToString().c_str());
+      return SFS_ERROR;
+  }
+
+  // Remove original file
+  std::string strSrcNode(srcNodePort);
+  XrdCl::FileSystem fs(strSrcNode);
+
+  if (!st.IsOK()) {
+      FixedEroute.Say("Warning: Could not remove original file ", st.ToString().c_str());
+      //eInfo.setErrInfo(st.errNo, st.ToString().c_str());
+      //return SFS_ERROR;
+  }
+
+  return SFS_OK;
 }
 
 /* Return state information on file or a directory */
@@ -187,6 +269,8 @@ int XrdFixedDataNode::truncate(const char *path, XrdSfsFileOffset fsize,
 /*           X r d F i x e d   i n t e r n a l  f u n c t i o n s            */
 /*****************************************************************************/
 void XrdFixedDataNode::setNativeFS(XrdSfsFileSystem *native) { nativeFS = native; }
+XrdFixedRedirector* XrdFixedDataNode::getWriteRedirector() { return writeRedirector; }
+void XrdFixedDataNode::setWriteRedirector(XrdFixedRedirector* r) { writeRedirector = r; }
 
 /*****************************************************************************/
 /*                                                                           */
