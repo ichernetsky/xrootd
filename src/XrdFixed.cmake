@@ -36,7 +36,8 @@ add_library(
   XrdFixedDataNode
   SHARED
   XrdFixed/XrdFixedDefines.hh
-  XrdFixed/XrdFixedDataNode.cc   XrdFixed/XrdFixedDataNode.hh )
+  XrdFixed/XrdFixedReporter.cc XrdFixed/XrdFixedReporter.hh
+  XrdFixed/XrdFixedDataNode.cc XrdFixed/XrdFixedDataNode.hh )
 
 set_target_properties(
   XrdFixedDataNode
