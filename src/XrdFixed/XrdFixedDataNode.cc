@@ -30,6 +30,7 @@
 
 #include "XrdFixed/XrdFixedDataNode.hh"
 
+
 #include "XrdVersion.hh"
 #include "XrdSys/XrdSysError.hh"
 #include "XrdOuc/XrdOucTrace.hh"
@@ -73,8 +74,14 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
       FixedEroute.Emsg("XrdFixedDataNode", "data node configuration error");
       return NULL;
   }
-
   XrdFixedDataNodeFS.setWriteRedirector(writeRedirector);
+
+  //XrdFixedReplicator* replicator = NULL;
+  /* new XrdFixedReplicator(configFN,
+                                       FixedEroute, FixedTrace);
+  if (replicator->getReplication())
+      XrdFixedDataNodeFS.setReplicator(replicator);
+  */
   return &XrdFixedDataNodeFS;
 }
 } // extern "C"
@@ -82,12 +89,18 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
 /*****************************************************************************/
 /*       X r d F i x e d D a t a N o d e   c o n s t r u c t o r             */
 /*****************************************************************************/
-XrdFixedDataNode::XrdFixedDataNode() : nativeFS(NULL) {}
+XrdFixedDataNode::XrdFixedDataNode() :
+    m_nativeFS(NULL),
+    m_replicator(NULL){}
 
 /*****************************************************************************/
 /*       X r d F i x e d D a t a N o d e   d e s t r u c t o r               */
 /*****************************************************************************/
-XrdFixedDataNode::~XrdFixedDataNode() {}
+XrdFixedDataNode::~XrdFixedDataNode() {
+    delete m_nativeFS;
+    delete m_writeRedirector;
+    delete m_replicator;
+}
 
 /*****************************************************************************/
 /*                                                                           */
@@ -101,33 +114,33 @@ XrdSfsDirectory *XrdFixedDataNode::newDir(char *user, int monid) {
 
 XrdSfsFile *XrdFixedDataNode::newFile(char *user, int monid) {
   FixedEroute.Say("XrdFixedDataNode ","newFile");
-  return new XrdFixedDataNodeFile(user, monid);
+  return new XrdFixedDataNodeFile(user, monid, getReplicator());
 }
 
 /* Change file mod settings */
 int XrdFixedDataNode::chmod(const char *path, XrdSfsMode mode, XrdOucErrInfo &eInfo,
                             const XrdSecEntity *client, const char *opaque) {
   FixedEroute.Say("XrdFixedDataNode ","chmod ", path);
-  return nativeFS->chmod(path, mode, eInfo, client, opaque);
+  return m_nativeFS->chmod(path, mode, eInfo, client, opaque);
 }
 
 /* File system control operation */
 int XrdFixedDataNode::fsctl(const int cmd, const char *args, XrdOucErrInfo &eInfo,
                             const XrdSecEntity *client) {
   FixedEroute.Say("XrdFixedDataNode ","fsctl");
-  return nativeFS->fsctl(cmd, args, eInfo, client);
+  return m_nativeFS->fsctl(cmd, args, eInfo, client);
 }
 
 /* Return statistical information */
 int XrdFixedDataNode::getStats(char *buff, int blen) {
   FixedEroute.Say("XrdFixedDataNode ","getStats");
-  return nativeFS->getStats(buff, blen);
+  return m_nativeFS->getStats(buff, blen);
 }
 
 /* Get version string */
 const char *XrdFixedDataNode::getVersion() {
   FixedEroute.Say("XrdFixedDataNode ","getVersion");
-  return nativeFS->getVersion();
+  return m_nativeFS->getVersion();
 }
 
 /* Return directory/file existense information (short list)  */
@@ -135,35 +148,35 @@ int XrdFixedDataNode::exists(const char *path, XrdSfsFileExistence &eFlag,
                              XrdOucErrInfo &eInfo, const XrdSecEntity *client,
                              const char *opaque) {
   FixedEroute.Say("XrdFixedDataNode ","exists ", path);
-  return nativeFS->exists(path, eFlag, eInfo, client, opaque);
+  return m_nativeFS->exists(path, eFlag, eInfo, client, opaque);
 }
 
 /* Create directory */
 int XrdFixedDataNode::mkdir(const char *path, XrdSfsMode mode, XrdOucErrInfo &eInfo,
                             const XrdSecEntity *client, const char *opaque) {
   FixedEroute.Say("XrdFixedDataNode ","mkdir ", path);
-  return nativeFS->mkdir(path, mode, eInfo, client, opaque);
+  return m_nativeFS->mkdir(path, mode, eInfo, client, opaque);
 }
 
 /* Prepare a file for future processing */
 int XrdFixedDataNode::prepare(XrdSfsPrep &pargs, XrdOucErrInfo &eInfo,
                               const XrdSecEntity *client) {
   FixedEroute.Say("XrdFixedDataNode ","prepare ");
-  return nativeFS->prepare(pargs, eInfo, client);
+  return m_nativeFS->prepare(pargs, eInfo, client);
 }
 
 /* Remove a file */
 int XrdFixedDataNode::rem(const char *path, XrdOucErrInfo &eInfo,
                           const XrdSecEntity *client, const char *opaque) {
   FixedEroute.Say("XrdFixedDataNode ","rem ", path);
-  return nativeFS->rem(path, eInfo, client, opaque);
+  return m_nativeFS->rem(path, eInfo, client, opaque);
 }
 
 /* Remove directory */
 int XrdFixedDataNode::remdir(const char *path, XrdOucErrInfo &eInfo,
                              const XrdSecEntity *client, const char *opaque) {
   FixedEroute.Say("XrdFixedDataNode ","remdir ", path);
-  return nativeFS->remdir(path, eInfo, client, opaque);
+  return m_nativeFS->remdir(path, eInfo, client, opaque);
 }
 
 /* Rename a file or directory */
@@ -177,7 +190,7 @@ int XrdFixedDataNode::rename(const char *oPath, const char *nPath, XrdOucErrInfo
   const char* port = (XrdFixedDataNodeFS.getWriteRedirector()->getPort());
 
   if (strncmp(srcNode, tgtNode, XRD_FIXED_MAX_HOSTNAME_LEN + 1) == 0)
-    return nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
+    return m_nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
 
   char srcUrl[XRD_FIXED_MAX_URL_LEN] = {0};
   char tgtUrl[XRD_FIXED_MAX_URL_LEN] = {0};
@@ -249,12 +262,12 @@ int XrdFixedDataNode::rename(const char *oPath, const char *nPath, XrdOucErrInfo
 int XrdFixedDataNode::stat(const char *name, struct stat *buf, XrdOucErrInfo &eInfo,
                            const XrdSecEntity *client, const char *opaque) {
   FixedEroute.Say("XrdFixedDataNode ","stat 5 ", name);
-  return nativeFS->stat(name, buf, eInfo, client, opaque);
+  return m_nativeFS->stat(name, buf, eInfo, client, opaque);
 }
 int XrdFixedDataNode::stat(const char *name, mode_t &mod, XrdOucErrInfo &eInfo,
                            const XrdSecEntity *client, const char *opaque) {
   FixedEroute.Say("XrdFixedDataNode ","stat 5.1 ", name);
-  return nativeFS->stat(name, mod, eInfo, client, opaque);
+  return m_nativeFS->stat(name, mod, eInfo, client, opaque);
 }
 
 /* Truncate a file */
@@ -262,15 +275,23 @@ int XrdFixedDataNode::truncate(const char *path, XrdSfsFileOffset fsize,
                                XrdOucErrInfo &eInfo, const XrdSecEntity *client,
                                const char *opaque) {
   FixedEroute.Say("XrdFixedDataNode ","truncate ", path);
-  return nativeFS->truncate(path, fsize, eInfo, client);
+  return m_nativeFS->truncate(path, fsize, eInfo, client);
 }
 
 /*****************************************************************************/
 /*           X r d F i x e d   i n t e r n a l  f u n c t i o n s            */
 /*****************************************************************************/
-void XrdFixedDataNode::setNativeFS(XrdSfsFileSystem *native) { nativeFS = native; }
-XrdFixedRedirector* XrdFixedDataNode::getWriteRedirector() { return writeRedirector; }
-void XrdFixedDataNode::setWriteRedirector(XrdFixedRedirector* r) { writeRedirector = r; }
+void XrdFixedDataNode::setNativeFS(XrdSfsFileSystem *native)
+     { m_nativeFS = native; }
+void XrdFixedDataNode::setWriteRedirector(XrdFixedRedirector* redirector)
+    { m_writeRedirector = redirector; }
+void XrdFixedDataNode::setReplicator(XrdFixedReplicator* replicator)
+    { m_replicator = replicator; }
+
+XrdFixedRedirector* XrdFixedDataNode::getWriteRedirector()
+    { return m_writeRedirector; }
+XrdFixedReplicator* XrdFixedDataNode::getReplicator()
+    { return m_replicator; }
 
 /*****************************************************************************/
 /*                                                                           */
@@ -281,16 +302,22 @@ void XrdFixedDataNode::setWriteRedirector(XrdFixedRedirector* r) { writeRedirect
 /*****************************************************************************/
 /*            X r d F i x e d F i l e   c o n s t r u c t o r                */
 /*****************************************************************************/
-XrdFixedDataNodeFile::XrdFixedDataNodeFile(char *user, int MonID) {
+XrdFixedDataNodeFile::XrdFixedDataNodeFile(char *user, int MonID,
+                                           const XrdFixedReplicator* replicator)
+    : m_trackChanges(false) {
   /* Initialize the natvie file object */
   FixedEroute.Say("XrdFixedDataNodeFile ","ctor");
-  nativeFile = XrdFixedDataNodeFS.nativeFS->newFile(user, MonID);
+  m_nativeFile = XrdFixedDataNodeFS.m_nativeFS->newFile(user, MonID);
+  m_replicator = NULL; //new XrdFixedReplicator(*replicator);
 }
 
 /*****************************************************************************/
 /*            X r d F i x e d F i l e   d e s t r u c t o r                  */
 /*****************************************************************************/
-XrdFixedDataNodeFile::~XrdFixedDataNodeFile() { delete nativeFile; }
+XrdFixedDataNodeFile::~XrdFixedDataNodeFile() {
+    delete m_nativeFile;
+    delete m_replicator;
+}
 
 /* Open a file */
 int XrdFixedDataNodeFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
@@ -305,45 +332,52 @@ int XrdFixedDataNodeFile::open(const char *fileName, XrdSfsFileOpenMode openMode
   FixedEroute.Say("XrdFixedDataNodeFile ","open ", msg);
 
   this->error.Reset();
-  nativeFile->error = this->error;
+  m_nativeFile->error = this->error;
 
-  if ((ret = nativeFile->open(fileName, openMode, createMode, client, opaque)) != SFS_OK)
-      this->error = nativeFile->error;
+  if ((ret = m_nativeFile->open(fileName, openMode, createMode, client, opaque)) != SFS_OK)
+      this->error = m_nativeFile->error;
+
+  int compareIndex = strlen(fileName) - strlen(XRD_FIXED_TRACK_FNAME) - 1;
+  if ((compareIndex > 1) && strncmp(&fileName[compareIndex], XRD_FIXED_TRACK_FNAME,
+                                    strlen(XRD_FIXED_TRACK_FNAME)))
+          m_trackChanges = true;
 
   return ret;
 }
 
 /* Close a file */
 int XrdFixedDataNodeFile::close() {
-  FixedEroute.Say("XrdFixedDataNodeFile ","close ", nativeFile->FName());
-  return nativeFile->close();
+  FixedEroute.Say("XrdFixedDataNodeFile ","close ", m_nativeFile->FName());
+  if (m_trackChanges)
+      m_replicator->close();
+  return m_nativeFile->close();
 }
 
 /* Execute a special operation on the file */
 int XrdFixedDataNodeFile::fctl(const int cmd, const char *args, XrdOucErrInfo &eInfo) {
 
   int ret;
-  FixedEroute.Say("XrdFixedDataNodeFile ","fctnl ", nativeFile->FName());
+  FixedEroute.Say("XrdFixedDataNodeFile ","fctnl ", m_nativeFile->FName());
 
   this->error.Reset();
-  nativeFile->error = this->error;
+  m_nativeFile->error = this->error;
 
-  if ((ret = nativeFile->fctl(cmd, args, eInfo)) != SFS_OK)
-      this->error = nativeFile->error;
+  if ((ret = m_nativeFile->fctl(cmd, args, eInfo)) != SFS_OK)
+      this->error = m_nativeFile->error;
 
   return ret;
 }
 
 /* Get File Path */
 const char *XrdFixedDataNodeFile::FName() {
-  FixedEroute.Say("XrdFixedDataNodeFile ","FName ", nativeFile->FName());
-  return nativeFile->FName();
+  FixedEroute.Say("XrdFixedDataNodeFile ","FName ", m_nativeFile->FName());
+  return m_nativeFile->FName();
 }
 
 /* Get file's memory mapping if one exists (memory mapped files only) */
 int XrdFixedDataNodeFile::getMmap(void **Addr, off_t &Size) {
-  FixedEroute.Say("XrdFixedDataNodeFile ","getMmap ", nativeFile->FName());
-  return nativeFile->getMmap(Addr, Size);
+  FixedEroute.Say("XrdFixedDataNodeFile ","getMmap ", m_nativeFile->FName());
+  return m_nativeFile->getMmap(Addr, Size);
 }
 
 /* Preread file blocks into the file system cache */
@@ -355,12 +389,12 @@ XrdSfsXferSize XrdFixedDataNodeFile::read(XrdSfsFileOffset offset,
   char msg[msg_len] = {0};
   snprintf(msg, msg_len, " offset: %lld, size: %d", offset, size);
 
-  FixedEroute.Say("XrdFixedDataNodeFile ","read 1 ", nativeFile->FName(), msg);
+  FixedEroute.Say("XrdFixedDataNodeFile ","read 1 ", m_nativeFile->FName(), msg);
   this->error.Reset();
-  nativeFile->error = this->error;
+  m_nativeFile->error = this->error;
 
-  if ((ret = nativeFile->read(offset, size)) < 0)
-      this->error = nativeFile->error;
+  if ((ret = m_nativeFile->read(offset, size)) < 0)
+      this->error = m_nativeFile->error;
 
   return ret;
 }
@@ -374,13 +408,13 @@ XrdSfsXferSize XrdFixedDataNodeFile::read(XrdSfsFileOffset offset, char *buffer,
   char msg[msg_len] = {0};
   snprintf(msg, msg_len, " offset: %lld, size: %d", offset, size);
 
-  FixedEroute.Say("XrdFixedDataNodeFile ","read 2 ", nativeFile->FName(), msg);
+  FixedEroute.Say("XrdFixedDataNodeFile ","read 2 ", m_nativeFile->FName(), msg);
 
   this->error.Reset();
-  nativeFile->error = this->error;
+  m_nativeFile->error = this->error;
 
-  if ((ret = nativeFile->read(offset, buffer, size)) < 0)
-      this->error = nativeFile->error;
+  if ((ret = m_nativeFile->read(offset, buffer, size)) < 0)
+      this->error = m_nativeFile->error;
 
   return ret;
 }
@@ -389,13 +423,13 @@ XrdSfsXferSize XrdFixedDataNodeFile::read(XrdSfsFileOffset offset, char *buffer,
 XrdSfsXferSize XrdFixedDataNodeFile::read(XrdSfsAio *aioparam) {
   int ret;
 
-  FixedEroute.Say("XrdFixedDataNodeFile ","read 3 ", nativeFile->FName());
+  FixedEroute.Say("XrdFixedDataNodeFile ","read 3 ", m_nativeFile->FName());
 
   this->error.Reset();
-  nativeFile->error = this->error;
+  m_nativeFile->error = this->error;
 
-  if ((ret = nativeFile->read(aioparam)) < 0)
-      this->error = nativeFile->error;
+  if ((ret = m_nativeFile->read(aioparam)) < 0)
+      this->error = m_nativeFile->error;
 
   return ret;
 }
@@ -409,13 +443,15 @@ XrdSfsXferSize XrdFixedDataNodeFile::write(XrdSfsFileOffset offset, const char *
   char msg[msg_len] = {0};
   snprintf(msg, msg_len, " offset: %lld, size: %d",offset, size);
 
+  if (m_trackChanges)
+      m_replicator->write(offset, size);
 
-  FixedEroute.Say("XrdFixedDataNodeFile ","write 1 ", nativeFile->FName(), msg);
+  FixedEroute.Say("XrdFixedDataNodeFile ","write 1 ", m_nativeFile->FName(), msg);
   this->error.Reset();
-  nativeFile->error = this->error;
+  m_nativeFile->error = this->error;
 
-  if ((ret = nativeFile->write(offset, buffer, size)) < 0)
-      this->error = nativeFile->error;
+  if ((ret = m_nativeFile->write(offset, buffer, size)) < 0)
+      this->error = m_nativeFile->error;
 
   return ret;
 }
@@ -424,32 +460,32 @@ XrdSfsXferSize XrdFixedDataNodeFile::write(XrdSfsFileOffset offset, const char *
 int XrdFixedDataNodeFile::write(XrdSfsAio *aioparam) {
   int ret;
 
-  FixedEroute.Say("XrdFixedDataNodeFile ","write 2 ", nativeFile->FName());
+  FixedEroute.Say("XrdFixedDataNodeFile ","write 2 ", m_nativeFile->FName());
   this->error.Reset();
-  nativeFile->error = this->error;
+  m_nativeFile->error = this->error;
 
-  if ((ret = nativeFile->write(aioparam)) < 0)
-      this->error = nativeFile->error;
+  if ((ret = m_nativeFile->write(aioparam)) < 0)
+      this->error = m_nativeFile->error;
 
   return ret;
 }
 
 /* Return state information on the file */
 int XrdFixedDataNodeFile::stat(struct stat *buf) {
-  FixedEroute.Say("XrdFixedDataNodeFile ","stat ", nativeFile->FName());
-  return nativeFile->stat(buf);
+  FixedEroute.Say("XrdFixedDataNodeFile ","stat ", m_nativeFile->FName());
+  return m_nativeFile->stat(buf);
 }
 
 /* Make sure all the outstanding data is actually written on the file (sync) */
 int XrdFixedDataNodeFile::sync() {
 
   int ret;
-  FixedEroute.Say("XrdFixedDataNodeFile ","sync 1 ", nativeFile->FName());
+  FixedEroute.Say("XrdFixedDataNodeFile ","sync 1 ", m_nativeFile->FName());
 
   this->error.Reset();
-  nativeFile->error = this->error;
-  if ((ret = nativeFile->sync()) != SFS_OK)
-      this->error = nativeFile->error;
+  m_nativeFile->error = this->error;
+  if ((ret = m_nativeFile->sync()) != SFS_OK)
+      this->error = m_nativeFile->error;
 
   return ret;
 }
@@ -457,12 +493,12 @@ int XrdFixedDataNodeFile::sync() {
 /* Make sure all outstanding data is actually written to the file (async) */
 int XrdFixedDataNodeFile::sync(XrdSfsAio *aiop) {
   int ret;
-  FixedEroute.Say("XrdFixedDataNodeFile ","sync 2 ", nativeFile->FName());
+  FixedEroute.Say("XrdFixedDataNodeFile ","sync 2 ", m_nativeFile->FName());
 
   this->error.Reset();
-  nativeFile->error = this->error;
-  if ((ret = nativeFile->sync(aiop)) != SFS_OK)
-      this->error = nativeFile->error;
+  m_nativeFile->error = this->error;
+  if ((ret = m_nativeFile->sync(aiop)) != SFS_OK)
+      this->error = m_nativeFile->error;
 
   return ret;
 }
@@ -471,12 +507,12 @@ int XrdFixedDataNodeFile::sync(XrdSfsAio *aiop) {
 int XrdFixedDataNodeFile::truncate(XrdSfsFileOffset fsize) {
  int ret = 0;
 
-  FixedEroute.Say("XrdFixedDataNodeFile ","truncate ", nativeFile->FName());
+  FixedEroute.Say("XrdFixedDataNodeFile ","truncate ", m_nativeFile->FName());
 
   this->error.Reset();
-  nativeFile->error = this->error;
-  if ((ret = nativeFile->truncate(fsize)) != SFS_OK)
-      this->error = nativeFile->error;
+  m_nativeFile->error = this->error;
+  if ((ret = m_nativeFile->truncate(fsize)) != SFS_OK)
+      this->error = m_nativeFile->error;
 
   return ret;
 }
@@ -484,7 +520,7 @@ int XrdFixedDataNodeFile::truncate(XrdSfsFileOffset fsize) {
 /* Get compression information on the file */
 int XrdFixedDataNodeFile::getCXinfo(char cxtype[4], int &cxrsz) {
   FixedEroute.Say("XrdFixedDataNodeFile ","getCXinfo");
-  return nativeFile->getCXinfo(cxtype, cxrsz);
+  return m_nativeFile->getCXinfo(cxtype, cxrsz);
 }
 
 /*****************************************************************************/
@@ -499,7 +535,7 @@ int XrdFixedDataNodeFile::getCXinfo(char cxtype[4], int &cxrsz) {
 XrdFixedDataNodeDirectory::XrdFixedDataNodeDirectory(char *user, int MonID) {
   /* Initialize the natvie directory object */
   FixedEroute.Say("XrdFixedDataNodeDirectory ","ctor");
-  nativeDirectory = XrdFixedDataNodeFS.nativeFS->newDir(user, MonID);
+  nativeDirectory = XrdFixedDataNodeFS.m_nativeFS->newDir(user, MonID);
 }
 
 /*****************************************************************************/

@@ -30,6 +30,7 @@
 
 #include "XrdSfs/XrdSfsInterface.hh"
 #include "XrdFixed/XrdFixedRedirector.hh"
+#include "XrdFixed/XrdFixedReplicator.hh"
 
 /*****************************************************************************/
 /*                  C l a s s    X r d F i x e d D i r e c t o r y           */
@@ -114,11 +115,13 @@ public:
   int getCXinfo(char cxtype[4], int &cxrsz);
 
   /* Constructor and Destructor */
-  XrdFixedDataNodeFile(char *user, int MonID);
+  XrdFixedDataNodeFile(char *user, int MonID, const XrdFixedReplicator* replicator);
   ~XrdFixedDataNodeFile();
 
 private:
-  XrdSfsFile *nativeFile;
+  XrdSfsFile *m_nativeFile;
+  XrdFixedReplicator* m_replicator;
+  bool m_trackChanges;
 }; // XrdFixedDataNodeFile
 
 /*****************************************************************************/
@@ -192,13 +195,16 @@ public:
 
   /* Internal functions */
   void setNativeFS(XrdSfsFileSystem *nativeFS);
-  void setWriteRedirector(XrdFixedRedirector *r);
+  void setWriteRedirector(XrdFixedRedirector *redirector);
+  void setReplicator(XrdFixedReplicator *replicator);
 
   XrdFixedRedirector* getWriteRedirector();
+  XrdFixedReplicator* getReplicator();
 
 private:
-  XrdSfsFileSystem *nativeFS;
-  XrdFixedRedirector *writeRedirector;
+  XrdSfsFileSystem *m_nativeFS;
+  XrdFixedRedirector *m_writeRedirector;
+  XrdFixedReplicator *m_replicator;
 }; // XrdFixedDataNode
 
 #endif

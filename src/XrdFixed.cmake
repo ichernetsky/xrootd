@@ -36,7 +36,8 @@ add_library(
   XrdFixedDataNode
   SHARED
   XrdFixed/XrdFixedDefines.hh
-  XrdFixed/XrdFixedReporter.cc XrdFixed/XrdFixedReporter.hh
+  XrdFixed/XrdFixedReplicator.cc XrdFixed/XrdFixedReplicator.hh
+  XrdFixed/XrdFixedRedirector.cc XrdFixed/XrdFixedRedirector.hh
   XrdFixed/XrdFixedDataNode.cc XrdFixed/XrdFixedDataNode.hh )
 
 set_target_properties(
@@ -49,7 +50,8 @@ set_target_properties(
 
 target_link_libraries(
   XrdFixedDataNode
-  XrdCl )
+  XrdCl
+  ${OPENSSL_LIBRARIES} )
 
 #-------------------------------------------------------------------------------
 # Install

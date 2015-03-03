@@ -27,16 +27,16 @@
 /******************************************************************************/
 
 #include <fcntl.h>
+#include <sstream>
 
 #include "XrdOuc/XrdOucEnv.hh"
 #include "XrdOuc/XrdOucStream.hh"
-#include "XrdFixed/XrdFixedReporter.hh"
-
+#include "XrdFixed/XrdFixedReplicator.hh"
 
 /*****************************************************************************/
-/*          X r d F i x e d R e p o r t e r  c o n s t r u c t o r           */
+/*          X r d F i x e d R e p o r t e r  c t o r                         */
 /*****************************************************************************/
-XrdFixedReporter::XrdFixedReporter(const char* ConfigFN, XrdSysError& FixedEroute,
+XrdFixedReplicator::XrdFixedReplicator(const char* ConfigFN, XrdSysError& FixedEroute,
                                    XrdOucTrace& FixedTrace) :
     Eroute(FixedEroute),
     Trace(FixedTrace) {
@@ -44,6 +44,7 @@ XrdFixedReporter::XrdFixedReporter(const char* ConfigFN, XrdSysError& FixedErout
     XrdOucEnv myEnv;
     XrdOucStream Config(NULL, getenv("XRDINSTANCE"), &myEnv, "=====> ");
     int cfgFD;
+    setReplication(false);
 
     if (!ConfigFN || !*ConfigFN)
         FixedEroute.Emsg("Config", "Configuration file not specified");
@@ -58,11 +59,37 @@ XrdFixedReporter::XrdFixedReporter(const char* ConfigFN, XrdSysError& FixedErout
         /* Iterate over config file */
         char* var;
         while ((var = Config.GetMyFirstWord())) {
-        } 
+            if (strcmp(XRD_FIXED_CONF_OPTION_REPLICATION, var) == 0) {
+                if (!(var = Config.GetWord())) {
+                    FixedEroute.Emsg("Config", "Replication option argument missing");
+                    setReplication(false);
+                }
+
+                if(strcmp(XRD_FIXED_CONF_OPTION_REPLICATION_ENABLED_VALUE, var) == 0)
+                    setReplication(true);
+                else if (strcmp(XRD_FIXED_CONF_OPTION_REPLICATION_DISABLED_VALUE, var) == 0)
+                    setReplication(false);
+                else {
+                    FixedEroute.Emsg("Config", "Invalid replication option argument: ", var);
+                    return;
+                }
+            }
+        }
     }
 }
 
-XrdFixedReporter::~XrdFixedReporter() {
+void XrdFixedReplicator::write(XrdSfsFileOffset offset, XrdSfsXferSize size) {
+    if (m_dirtyMap[offset] < size)
+        m_dirtyMap[offset] = size;
 }
 
+void XrdFixedReplicator::close() {
+    Eroute.Emsg("Replicator", "close");
+    for (std::map<XrdSfsFileOffset, XrdSfsXferSize>::iterator it = m_dirtyMap.begin();
+            it != m_dirtyMap.end(); ++it) {
+        std::ostringstream convert;
+        convert << it->first << " " << it->second;
+        Eroute.Emsg("Replicator", convert.str().c_str());
+    }
+}
 

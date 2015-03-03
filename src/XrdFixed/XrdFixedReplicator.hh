@@ -1,5 +1,5 @@
-#ifndef __XRD_FIXED_REPORTER_H__
-#define __XRD_FIXED_REPORTER_H__
+#ifndef __XRD_FIXED_REPLICATOR_H__
+#define __XRD_FIXED_REPLICATOR_H__
 /******************************************************************************/
 /*                                                                            */
 /*               X r d F i x e d R e p o r t e r . h h                        */
@@ -32,22 +32,37 @@
 /*                  C l a s s    X r d F i x e d R e p o r t e r             */
 /*****************************************************************************/
 
+#include <map>
+
+#include "XrdSfs/XrdSfsInterface.hh"
 #include "XrdSys/XrdSysError.hh"
 #include "XrdOuc/XrdOucTrace.hh"
 
 #include "XrdFixed/XrdFixedDefines.hh"
 
-class XrdFixedReporter {
+class XrdFixedReplicator {
 public:
+  /* methods */
+  void write(XrdSfsFileOffset offset, XrdSfsXferSize size);
+  void close();
 
-  /* Constructor and Destructor */
-  XrdFixedReporter(const char* configFN, XrdSysError& FixedEroute, XrdOucTrace& FixedTrace);
-  virtual ~XrdFixedReporter();
+  /* setters and getters */
+  void setReplication(bool b) 
+    { m_replicationEnabled = b; }
+  bool getReplication() 
+    { return m_replicationEnabled; }
+
+  /* constructor and Destructor */
+  XrdFixedReplicator(const char* configFN, XrdSysError& FixedEroute, XrdOucTrace& FixedTrace);
+  XrdFixedReplicator(const XrdFixedReplicator& other);
+  virtual ~XrdFixedReplicator() {};
 
 private:
-    XrdSysError& Eroute;
-    XrdOucTrace& Trace;
-}; // class XrdFixedReporter
+    XrdSysError&                               Eroute;
+    XrdOucTrace&                               Trace;
+    bool                                       m_replicationEnabled;
+    std::map<XrdSfsFileOffset, XrdSfsXferSize> m_dirtyMap;
+}; // class XrdFixedReplicator
 
-#endif // __XRD_FIXED_REPORTER_H__
+#endif // __XRD_FIXED_REPLICATOR_H__
 
