@@ -47,10 +47,8 @@ public:
   void close();
 
   /* setters and getters */
-  void setReplication(bool b) 
-    { m_replicationEnabled = b; }
-  bool getReplication() 
-    { return m_replicationEnabled; }
+  void setReplication(bool b);
+  bool getReplication();
 
   /* constructor and Destructor */
   XrdFixedReplicator(const char* configFN, XrdSysError& FixedEroute, XrdOucTrace& FixedTrace);

@@ -76,12 +76,10 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
   }
   XrdFixedDataNodeFS.setWriteRedirector(writeRedirector);
 
-  //XrdFixedReplicator* replicator = NULL;
-  /* new XrdFixedReplicator(configFN,
+  XrdFixedReplicator* replicator = new XrdFixedReplicator(configFN,
                                        FixedEroute, FixedTrace);
-  if (replicator->getReplication())
-      XrdFixedDataNodeFS.setReplicator(replicator);
-  */
+  XrdFixedDataNodeFS.setReplicator(replicator);
+
   return &XrdFixedDataNodeFS;
 }
 } // extern "C"
@@ -308,7 +306,7 @@ XrdFixedDataNodeFile::XrdFixedDataNodeFile(char *user, int MonID,
   /* Initialize the natvie file object */
   FixedEroute.Say("XrdFixedDataNodeFile ","ctor");
   m_nativeFile = XrdFixedDataNodeFS.m_nativeFS->newFile(user, MonID);
-  m_replicator = NULL; //new XrdFixedReplicator(*replicator);
+  m_replicator = new XrdFixedReplicator(*replicator);
 }
 
 /*****************************************************************************/
@@ -337,10 +335,13 @@ int XrdFixedDataNodeFile::open(const char *fileName, XrdSfsFileOpenMode openMode
   if ((ret = m_nativeFile->open(fileName, openMode, createMode, client, opaque)) != SFS_OK)
       this->error = m_nativeFile->error;
 
-  int compareIndex = strlen(fileName) - strlen(XRD_FIXED_TRACK_FNAME) - 1;
-  if ((compareIndex > 1) && strncmp(&fileName[compareIndex], XRD_FIXED_TRACK_FNAME,
-                                    strlen(XRD_FIXED_TRACK_FNAME)))
-          m_trackChanges = true;
+  /* Check if the replicator if enabled; enable tracking for this file if necessary */
+  if (m_replicator->getReplication()) {
+      int compareIndex = strlen(fileName) - strlen(XRD_FIXED_TRACK_FNAME);
+      if ((compareIndex > 0) && (strncmp(&fileName[compareIndex], XRD_FIXED_TRACK_FNAME,
+                                        strlen(XRD_FIXED_TRACK_FNAME)) == 0))
+      m_trackChanges = true;
+  }
 
   return ret;
 }

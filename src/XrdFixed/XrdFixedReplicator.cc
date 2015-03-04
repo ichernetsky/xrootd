@@ -34,7 +34,7 @@
 #include "XrdFixed/XrdFixedReplicator.hh"
 
 /*****************************************************************************/
-/*          X r d F i x e d R e p o r t e r  c t o r                         */
+/*          X r d F i x e d R e p l i c a t o r   c t o r                    */
 /*****************************************************************************/
 XrdFixedReplicator::XrdFixedReplicator(const char* ConfigFN, XrdSysError& FixedEroute,
                                    XrdOucTrace& FixedTrace) :
@@ -65,8 +65,10 @@ XrdFixedReplicator::XrdFixedReplicator(const char* ConfigFN, XrdSysError& FixedE
                     setReplication(false);
                 }
 
-                if(strcmp(XRD_FIXED_CONF_OPTION_REPLICATION_ENABLED_VALUE, var) == 0)
+                if(strcmp(XRD_FIXED_CONF_OPTION_REPLICATION_ENABLED_VALUE, var) == 0) {
+                    FixedEroute.Emsg("Config", "enabling file replication for ", XRD_FIXED_TRACK_FNAME, " files");                   
                     setReplication(true);
+                }
                 else if (strcmp(XRD_FIXED_CONF_OPTION_REPLICATION_DISABLED_VALUE, var) == 0)
                     setReplication(false);
                 else {
@@ -78,11 +80,22 @@ XrdFixedReplicator::XrdFixedReplicator(const char* ConfigFN, XrdSysError& FixedE
     }
 }
 
+XrdFixedReplicator::XrdFixedReplicator(const XrdFixedReplicator& other) :
+ Eroute(other.Eroute),
+ Trace(other.Trace),
+ m_replicationEnabled(other.m_replicationEnabled) {};
+
+/*****************************************************************************/
+/*          X r d F i x e d R e p l i c a t o r   m e t h o d s              */
+/*****************************************************************************/
+
+/* Updates the entry for a given offset in an internal map */
 void XrdFixedReplicator::write(XrdSfsFileOffset offset, XrdSfsXferSize size) {
     if (m_dirtyMap[offset] < size)
         m_dirtyMap[offset] = size;
 }
 
+/* Flushes out the internal map of updates */
 void XrdFixedReplicator::close() {
     Eroute.Emsg("Replicator", "close");
     for (std::map<XrdSfsFileOffset, XrdSfsXferSize>::iterator it = m_dirtyMap.begin();
@@ -92,4 +105,10 @@ void XrdFixedReplicator::close() {
         Eroute.Emsg("Replicator", convert.str().c_str());
     }
 }
+
+/* Getters and setters */
+void XrdFixedReplicator::setReplication(bool b)
+    { m_replicationEnabled = b;  }
+bool XrdFixedReplicator::getReplication()
+    { return m_replicationEnabled; }
 
