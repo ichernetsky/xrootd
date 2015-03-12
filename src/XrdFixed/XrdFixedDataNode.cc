@@ -246,6 +246,7 @@ int XrdFixedDataNode::rename(const char *oPath, const char *nPath, XrdOucErrInfo
   // Remove original file
   std::string strSrcNode(srcNodePort);
   XrdCl::FileSystem fs(strSrcNode);
+  st = fs.Rm(oPath);
 
   if (!st.IsOK()) {
       FixedEroute.Say("Warning: Could not remove original file ", st.ToString().c_str());
