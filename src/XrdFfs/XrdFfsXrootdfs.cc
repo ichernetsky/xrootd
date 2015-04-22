@@ -728,7 +728,7 @@ static int xrootdfs_open(const char *path, struct fuse_file_info *fi)
 
     XrdFfsMisc_xrd_secsss_register(fuse_get_context()->uid, fuse_get_context()->gid, &lid);
     XrdFfsMisc_xrd_secsss_editurl(rootpath, fuse_get_context()->uid, &lid);
-    res = XrdFfsPosix_open(rootpath, fi->flags, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    res = XrdFfsPosix_open(rootpath, fi->flags, 0);
     if (res == -1)
         return -errno;
 
