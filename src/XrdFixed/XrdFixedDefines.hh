@@ -28,8 +28,9 @@
 /* specific prior written permission of the institution or contributor.       */
 /******************************************************************************/
 
-#define XRD_FIXED_MAX_CLUSTER_SIZE 64
+#define XRD_FIXED_MAX_CLUSTER_SIZE 63
 #define XRD_FIXED_MAX_HOSTNAME_LEN 255
+#define XRD_FIXED_MAX_PORT_LEN 5
 #define XRD_FIXED_MAX_URL_LEN 1024
 #define XRD_FIXED_DEFAULT_N_PORT 1094
 #define XRD_FIXED_DEFAULT_PORT "1094"
@@ -42,4 +43,3 @@
 #define XRD_FIXED_TRACK_FNAME "mii"
 
 #endif // __XRD_FIXED_DEFINES_H__
-

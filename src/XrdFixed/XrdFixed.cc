@@ -70,7 +70,7 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
   XrdFixedRedirector* writeRedirector = new XrdFixedRedirector(configFN,
                                             FixedEroute, FixedTrace);
 
-  if (writeRedirector->getnNodes() < 1) {
+  if (writeRedirector->getNodeCount() < 1) {
     FixedEroute.Emsg("XrdFixed", "data node configuration error");
     return NULL;
   }
@@ -211,10 +211,11 @@ void XrdFixed::setWriteRedirector(XrdFixedRedirector* r) { writeRedirector = r; 
 
 /* Redirect a request to the right node */
 int XrdFixed::redirect(const char* path, XrdOucErrInfo &eInfo) {
-  const char *dataNode = writeRedirector->node(path);
-  unsigned int n_port = writeRedirector->getNumericPort();
+  const XrdFixedNode node = writeRedirector->getNode(path);
+  const char *hostname = node.getHostname();
+  int port = node.getNumericPort();
   eInfo.Reset();
-  eInfo.setErrInfo(n_port, dataNode);
+  eInfo.setErrInfo(port, hostname);
   return SFS_REDIRECT;
 }
 
@@ -271,10 +272,12 @@ int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
   }
 
   /* otherwise, always redirect */
-  const char *dataNode = XrdFixedFS.getWriteRedirector()->node(fileName);
-  unsigned int n_port = XrdFixedFS.getWriteRedirector()->getNumericPort();
-  FixedEroute.Say("Redirecting to ", dataNode);
-  this->error.setErrInfo(n_port, dataNode);
+  XrdFixedNode node = XrdFixedFS.getWriteRedirector()->getNode(fileName);
+  const char *hostname = node.getHostname();
+  int port = node.getNumericPort();
+
+  FixedEroute.Say("Redirecting to ", hostname);
+  this->error.setErrInfo(port, hostname);
   return SFS_REDIRECT;
 }
 

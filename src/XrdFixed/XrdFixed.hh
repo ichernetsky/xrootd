@@ -195,11 +195,11 @@ public:
   void setWriteRedirector(XrdFixedRedirector *r);
 
   XrdFixedRedirector* getWriteRedirector();
-    
-private:
-  int redirect(const char* name, XrdOucErrInfo &eInfo);    
 
-  XrdSfsFileSystem *nativeFS;   
+private:
+  int redirect(const char* name, XrdOucErrInfo &eInfo);
+
+  XrdSfsFileSystem *nativeFS;
   XrdFixedRedirector *writeRedirector;
 }; // XrdFixedFileSystem
 

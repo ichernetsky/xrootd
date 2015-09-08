@@ -70,7 +70,7 @@ XrdSfsFileSystem *XrdSfsGetFileSystem(XrdSfsFileSystem *nativeFS,
   XrdFixedDataNodeFS.setNativeFS(nativeFS);
   XrdFixedRedirector* writeRedirector = new XrdFixedRedirector(configFN,
                                         FixedEroute, FixedTrace);
-  if (writeRedirector->getnNodes() < 1) {
+  if (writeRedirector->getNodeCount() < 1) {
       FixedEroute.Emsg("XrdFixedDataNode", "data node configuration error");
       return NULL;
   }
@@ -183,31 +183,36 @@ int XrdFixedDataNode::rename(const char *oPath, const char *nPath, XrdOucErrInfo
                              const char *opaqueN) {
   FixedEroute.Say("XrdFixedDataNode ","rename ", oPath, nPath);
   /* use native when sourece and destintation belong to the same node */
-  const char *srcNode = (XrdFixedDataNodeFS.getWriteRedirector()->node(oPath));
-  const char *tgtNode = (XrdFixedDataNodeFS.getWriteRedirector()->node(nPath));
-  const char* port = (XrdFixedDataNodeFS.getWriteRedirector()->getPort());
+  XrdFixedNode srcNode = (XrdFixedDataNodeFS.getWriteRedirector()->getNode(oPath));
+  XrdFixedNode tgtNode = (XrdFixedDataNodeFS.getWriteRedirector()->getNode(nPath));
+  const char *srcHost = srcNode.getHostname();
+  const char *tgtHost = tgtNode.getHostname();
+  const char* srcPort = srcNode.getPort();
+  const char* tgtPort = tgtNode.getPort();
 
-  if (strncmp(srcNode, tgtNode, XRD_FIXED_MAX_HOSTNAME_LEN + 1) == 0)
+  if (strncmp(srcNode.getHostname(), tgtNode.getHostname(),
+              XRD_FIXED_MAX_HOSTNAME_LEN + 1) == 0 &&
+      srcNode.getNumericPort() == tgtNode.getNumericPort())
     return m_nativeFS->rename(oPath, nPath, eInfo, client, opaqueO, opaqueN);
 
   char srcUrl[XRD_FIXED_MAX_URL_LEN] = {0};
   char tgtUrl[XRD_FIXED_MAX_URL_LEN] = {0};
   char srcNodePort[XRD_FIXED_MAX_URL_LEN] = {0};
 
-  if (snprintf(srcUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", srcNode, port, oPath) >= XRD_FIXED_MAX_URL_LEN) {
+  if (snprintf(srcUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", srcHost, srcPort, oPath) >= XRD_FIXED_MAX_URL_LEN) {
       const char* err = "Error: source url length exceeds the limit";
       FixedEroute.Say(err);
       eInfo.setErrInfo(-1, err);
       return SFS_ERROR;
   }
-  if (snprintf(tgtUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", tgtNode, port, nPath) >= XRD_FIXED_MAX_URL_LEN) {
+  if (snprintf(tgtUrl, XRD_FIXED_MAX_URL_LEN, "root://%s:%s/%s", tgtHost, tgtPort, nPath) >= XRD_FIXED_MAX_URL_LEN) {
       const char* err = "Error: target url length exceeds the limit";
       FixedEroute.Say(err);
       eInfo.setErrInfo(-1, err);
       return SFS_ERROR;
   }
 
-  if (snprintf(srcNodePort, XRD_FIXED_MAX_URL_LEN, "root://%s:%s", srcNode, port) >= XRD_FIXED_MAX_URL_LEN) {
+  if (snprintf(srcNodePort, XRD_FIXED_MAX_URL_LEN, "root://%s:%s", srcHost, srcPort) >= XRD_FIXED_MAX_URL_LEN) {
       // Should never get here
       const char* err = "Error: target url length exceeds the limit";
       FixedEroute.Say(err);

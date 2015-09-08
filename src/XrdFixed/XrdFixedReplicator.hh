@@ -63,4 +63,3 @@ private:
 }; // class XrdFixedReplicator
 
 #endif // __XRD_FIXED_REPLICATOR_H__
-

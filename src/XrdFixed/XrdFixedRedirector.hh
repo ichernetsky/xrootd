@@ -37,18 +37,36 @@
 
 #include "XrdFixed/XrdFixedDefines.hh"
 
+class XrdFixedNode {
+public:
+  const char* getHostname() const;
+  const char* getPort() const;
+  int getNumericPort() const;
+
+  void setPort(const char* PortStr, int Port);
+  bool isPortSet() const;
+
+  /* Constructor and Destructor */
+  XrdFixedNode();
+  XrdFixedNode(const char* Hostname);
+  XrdFixedNode(const char* Hostname, const char* PortStr, int Port);
+  virtual ~XrdFixedNode();
+
+private:
+  char hostname[XRD_FIXED_MAX_HOSTNAME_LEN + 1];
+  char portStr[XRD_FIXED_MAX_PORT_LEN + 1];
+  int port;
+  bool isPortSet_;
+}; // class XrdFixedNode
+
 class XrdFixedRedirector {
 public:
 
   /* Get node name for a given file name */
-  const char *node(const char* path);
+  const XrdFixedNode getNode(const char* path);
 
   /* Return number of nodes */
-  long getnNodes();
-
-  /* Return the port */
-  const char* getPort();
-  unsigned int getNumericPort();
+  int getNodeCount();
 
   /* Constructor and Destructor */
   XrdFixedRedirector(const char* configFN, XrdSysError& FixedEroute, XrdOucTrace& FixedTrace);
@@ -57,13 +75,14 @@ public:
 private:
   void normalizePath(const char* path, char* normalizedPath, unsigned int* size);
 
-  char nodes[XRD_FIXED_MAX_CLUSTER_SIZE - 1][XRD_FIXED_MAX_HOSTNAME_LEN + 1];
-  long nNodes;
-  char str_port[6];
-  unsigned int n_port;
-  XrdSysError& Eroute; 
+  XrdFixedNode nodes[XRD_FIXED_MAX_CLUSTER_SIZE];
+  int nodeCount;
+
+  char defaultPortStr[XRD_FIXED_MAX_PORT_LEN + 1];
+  int defaultPort;
+
+  XrdSysError& Eroute;
   XrdOucTrace& Trace;
 }; // class XrdFixedRedirector
 
 #endif // __XRD_FIXED_REDIRECTOR_H__
-

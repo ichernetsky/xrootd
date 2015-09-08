@@ -66,7 +66,7 @@ XrdFixedReplicator::XrdFixedReplicator(const char* ConfigFN, XrdSysError& FixedE
                 }
 
                 if(strcmp(XRD_FIXED_CONF_OPTION_REPLICATION_ENABLED_VALUE, var) == 0) {
-                    FixedEroute.Emsg("Config", "enabling file replication for ", XRD_FIXED_TRACK_FNAME, " files");                   
+                    FixedEroute.Emsg("Config", "enabling file replication for ", XRD_FIXED_TRACK_FNAME, " files");
                     setReplication(true);
                 }
                 else if (strcmp(XRD_FIXED_CONF_OPTION_REPLICATION_DISABLED_VALUE, var) == 0)
@@ -111,4 +111,3 @@ void XrdFixedReplicator::setReplication(bool b)
     { m_replicationEnabled = b;  }
 bool XrdFixedReplicator::getReplication()
     { return m_replicationEnabled; }
-

@@ -36,6 +36,60 @@
 #include "XrdFixed/XrdFixedRedirector.hh"
 
 
+XrdFixedNode::XrdFixedNode()
+   : port(0), isPortSet_(false)
+{
+    memset(hostname, '\0', sizeof(hostname));
+    memset(portStr, '\0', sizeof(portStr));
+}
+XrdFixedNode::XrdFixedNode(const char* Hostname)
+    : port(0), isPortSet_(false)
+{
+    strncpy(hostname, Hostname, XRD_FIXED_MAX_HOSTNAME_LEN + 1);
+    hostname[XRD_FIXED_MAX_HOSTNAME_LEN] = '\0';
+    memset(portStr, '\0', sizeof(portStr));
+}
+
+XrdFixedNode::XrdFixedNode(const char* Hostname, const char* PortStr, int Port)
+    : port(Port), isPortSet_(true)
+{
+    strncpy(hostname, Hostname, XRD_FIXED_MAX_HOSTNAME_LEN + 1);
+    hostname[XRD_FIXED_MAX_HOSTNAME_LEN] = '\0';
+    strncpy(portStr, PortStr, XRD_FIXED_MAX_PORT_LEN + 1);
+    portStr[XRD_FIXED_MAX_PORT_LEN] = '\0';
+}
+
+const char* XrdFixedNode::getHostname() const {
+    return hostname;
+}
+
+const char* XrdFixedNode::getPort() const {
+    if (isPortSet_) return portStr;
+    return XRD_FIXED_DEFAULT_PORT;
+}
+
+int XrdFixedNode::getNumericPort() const
+{
+    if (isPortSet_) return port;
+    return XRD_FIXED_DEFAULT_N_PORT;
+}
+
+void XrdFixedNode::setPort(const char* PortStr, int Port)
+{
+    strncpy(portStr, PortStr, XRD_FIXED_MAX_PORT_LEN + 1);
+    portStr[XRD_FIXED_MAX_PORT_LEN] = '\0';
+    port = Port;
+    isPortSet_ = true;
+}
+
+bool XrdFixedNode::isPortSet() const
+{
+    return isPortSet_;
+}
+
+XrdFixedNode::~XrdFixedNode() {
+}
+
 /*****************************************************************************/
 /*      X r d F i x e d R e d i r e c t o r  c o n s t r u c t o r           */
 /*****************************************************************************/
@@ -47,9 +101,16 @@ XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN,
 
     XrdOucEnv myEnv;
     XrdOucStream Config(NULL, getenv("XRDINSTANCE"), &myEnv, "=====> ");
-    int cfgFD;
-    char *var;
-    n_port = 0;
+    int cfgFD = 0;
+    char *var = NULL;
+
+    char hostname[XRD_FIXED_MAX_HOSTNAME_LEN + 1] = {0};
+    const char *portPtr = NULL;
+    int port = 0;
+
+    nodeCount = 0;
+    defaultPortStr[0] = '\0';
+    defaultPort = 0;
 
     if (!ConfigFN || !*ConfigFN)
         FixedEroute.Emsg("Config", "Configuration file not specified");
@@ -67,65 +128,89 @@ XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN,
             if (strncmp(var, "xrd.port", 8) == 0) {
                 if (!(var = Config.GetWord())) {
                     FixedEroute.Emsg("Config", "xrd.port value missing");
-                    str_port[0] = '\0';
-                    n_port = 0;
                     return;
                 }
 
-                n_port = strtol(var, NULL, 10);
-                if (n_port > 65535) {
-                    FixedEroute.Emsg("Config", "Invalid xrd.port value");
-                    str_port[0] = '\0';
-                    n_port = 0;
-                    return;
-                }
+                /* We are intersted only in the simplest form: xrd.port N  */
+                if (Config.GetWord()) continue;
 
-                strncpy(str_port, var, 5);
+                defaultPort = atoi(var);
+                if (defaultPort < 1 || defaultPort > 65535) return;
+
+                strncpy(defaultPortStr, var, XRD_FIXED_MAX_PORT_LEN + 1);
+                defaultPortStr[XRD_FIXED_MAX_PORT_LEN] = '\0';
             }
+
             if (strncmp(var, "fixed.hosts", 11) == 0) {
 
                 if (!(var = Config.GetWord())) {
                     FixedEroute.Emsg("Config", "Number of servers not specified for fixed.hosts");
-                    nNodes = 0;
                     return;
                 }
 
                 /* Get the number of servers */
-                nNodes = strtol(var, NULL, 10);
-                if (nNodes < 1 || nNodes > 63) {
+                nodeCount = atoi(var);
+                if (nodeCount < 1 || nodeCount > 63) {
                     FixedEroute.Emsg("Config", "number of servers for fixed.hosts should be between 1 - 63");
                     return;
                 }
 
-                long i = nNodes;
+                int i = nodeCount;
                 /* Iterate over the list of nodes */
                 while (i > 0) {
                     if (!(var = Config.GetWord()))
                         break;
 
                     unsigned int nHost = strlen(var);
+                    portPtr = strrchr(var, ':');
+                    if (portPtr != NULL) {
+                        portPtr++;
+                        nHost -= strlen(portPtr) + 1;
+
+                        port = atoi(portPtr);
+                        if (port < 1 || port > 65535) {
+                            FixedEroute.Emsg("Config", "Invalid xrd.port value");
+                            return;
+                        }
+                    }
+
                     if (nHost > XRD_FIXED_MAX_HOSTNAME_LEN) {
                         FixedEroute.Emsg("Config", "fixed.hosts hostname too long");
-                        nNodes = 0;
+                        nodeCount = 0;
                         return;
                     }
-                    strncpy(nodes[nNodes - i], var, XRD_FIXED_MAX_HOSTNAME_LEN + 1);
-                    FixedEroute.Emsg("Config", "Got", nodes[nNodes - i]);
+
+                    memmove(hostname, var, nHost);
+                    hostname[nHost] = '\0';
+
+                    if (portPtr) {
+                        FixedEroute.Emsg("Config", "Got", "Setting custom port");
+                        nodes[nodeCount - i] = XrdFixedNode(hostname, portPtr, port);
+                    }
+                    else {
+                        nodes[nodeCount - i] = XrdFixedNode(hostname);
+                    }
+
+                    FixedEroute.Emsg("Config", "Got", var);
                     --i;
                 }
 
                 if (i != 0) {
                     FixedEroute.Emsg("Config", "fixed.hosts server number mismatch");
-                    nNodes = 0;
+                    nodeCount = 0;
                     return;
                 }
             }
         }
 
-    }
-    if (str_port == NULL) {
-        strncpy(str_port, XRD_FIXED_DEFAULT_PORT, XRD_FIXED_DEFAULT_PORT_LEN);
-        n_port = XRD_FIXED_DEFAULT_N_PORT;
+        if (defaultPort != 0) {
+            for (int i = 0; i < nodeCount; i++) {
+                if (nodes[i].isPortSet()) {
+                    FixedEroute.Emsg("Config", "Got", "Setting default port from xrd.port");
+                    nodes[i].setPort(defaultPortStr, defaultPort);
+                }
+            }
+        }
     }
 }
 
@@ -133,7 +218,7 @@ XrdFixedRedirector::~XrdFixedRedirector() {
 }
 
 /* Given a file name return a node name where the file should be created */
-const char* XrdFixedRedirector::node(const char* path) {
+const XrdFixedNode XrdFixedRedirector::getNode(const char* path) {
     unsigned char result[MD5_DIGEST_LENGTH];
     char normPath[XRD_FIXED_MAX_URL_LEN] = {0};
     unsigned int normPathLen = XRD_FIXED_MAX_URL_LEN;
@@ -142,17 +227,10 @@ const char* XrdFixedRedirector::node(const char* path) {
     MD5((const unsigned char*) normPath, normPathLen, result);
 
     /* use the first byte of the checksum to see which node to choose */
-    unsigned int nodeIndex = result[0] % nNodes;
-    Eroute.Emsg("XrdFixedRedirector", path, normPath, nodes[nodeIndex]);
+    int nodeIndex = result[0] % nodeCount;
+    Eroute.Emsg("XrdFixedRedirector", path, normPath,
+                nodes[nodeIndex].getHostname());
     return nodes[nodeIndex];
-}
-
-const char* XrdFixedRedirector::getPort() {
-    return str_port;
-}
-
-unsigned int XrdFixedRedirector::getNumericPort() {
-    return n_port;
 }
 
 void XrdFixedRedirector::normalizePath(const char* path, char* normalizedPath, unsigned int* size) {
@@ -184,7 +262,6 @@ void XrdFixedRedirector::normalizePath(const char* path, char* normalizedPath, u
 }
 
 /* Return a number of available nodes */
-long XrdFixedRedirector::getnNodes() {
-    return nNodes;
+int XrdFixedRedirector::getNodeCount() {
+    return nodeCount;
 }
-
