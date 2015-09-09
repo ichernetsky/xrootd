@@ -30,6 +30,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <assert.h>
+#include <cstdio>
 
 #include "XrdOuc/XrdOucEnv.hh"
 #include "XrdOuc/XrdOucStream.hh"
@@ -99,6 +100,8 @@ XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN,
     Eroute(FixedEroute),
     Trace(FixedTrace) {
 
+    char msg[2048] = {0};
+
     XrdOucEnv myEnv;
     XrdOucStream Config(NULL, getenv("XRDINSTANCE"), &myEnv, "=====> ");
     int cfgFD = 0;
@@ -150,8 +153,10 @@ XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN,
 
                 /* Get the number of servers */
                 nodeCount = atoi(var);
-                if (nodeCount < 1 || nodeCount > 63) {
-                    FixedEroute.Emsg("Config", "number of servers for fixed.hosts should be between 1 - 63");
+                if (nodeCount < 1 || nodeCount > XRD_FIXED_MAX_CLUSTER_SIZE) {
+                    snprintf(msg, sizeof(msg), "number of servers for fixed.hosts should be between 1 - %d",
+                             XRD_FIXED_MAX_CLUSTER_SIZE);
+                    FixedEroute.Emsg("Config", msg);
                     return;
                 }
 
@@ -169,7 +174,8 @@ XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN,
 
                         port = atoi(portPtr);
                         if (port < 1 || port > 65535) {
-                            FixedEroute.Emsg("Config", "Invalid xrd.port value");
+                            snprintf(msg, sizeof(msg), "Invalid xrd.port value: %s", portPtr);
+                            FixedEroute.Emsg("Config", msg);
                             return;
                         }
                     }
@@ -184,14 +190,16 @@ XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN,
                     hostname[nHost] = '\0';
 
                     if (portPtr) {
-                        FixedEroute.Emsg("Config", "Got", "Setting custom port");
+                        snprintf(msg, sizeof(msg), "Adding node: %s:%d", hostname, port);
+                        FixedEroute.Emsg("Config", msg);
                         nodes[nodeCount - i] = XrdFixedNode(hostname, portPtr, port);
                     }
                     else {
+                        snprintf(msg, sizeof(msg), "Adding node: %s", hostname);
+                        FixedEroute.Emsg("Config", msg);
                         nodes[nodeCount - i] = XrdFixedNode(hostname);
                     }
 
-                    FixedEroute.Emsg("Config", "Got", var);
                     --i;
                 }
 
@@ -204,9 +212,14 @@ XrdFixedRedirector::XrdFixedRedirector(const char* ConfigFN,
         }
 
         if (defaultPort != 0) {
+            snprintf(msg, sizeof(msg), "Default port: %d", defaultPort);
+            FixedEroute.Emsg("Config", msg);
+
             for (int i = 0; i < nodeCount; i++) {
-                if (nodes[i].isPortSet()) {
-                    FixedEroute.Emsg("Config", "Got", "Setting default port from xrd.port");
+                if (!nodes[i].isPortSet()) {
+                    snprintf(msg, sizeof(msg), "Setting default port for %s: %d",
+                             nodes[i].getHostname(), defaultPort);
+                    FixedEroute.Emsg("Config", msg);
                     nodes[i].setPort(defaultPortStr, defaultPort);
                 }
             }

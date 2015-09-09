@@ -276,7 +276,8 @@ int XrdFixedFile::open(const char *fileName, XrdSfsFileOpenMode openMode,
   const char *hostname = node.getHostname();
   int port = node.getNumericPort();
 
-  FixedEroute.Say("Redirecting to ", hostname);
+  snprintf(msg, msg_len, "%s:%d", hostname, port);
+  FixedEroute.Say("Redirecting to ", msg);
   this->error.setErrInfo(port, hostname);
   return SFS_REDIRECT;
 }
